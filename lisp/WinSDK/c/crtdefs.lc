@@ -1,0 +1,4 @@
+(require "WinSDK/foreign")
+(lisp::in-package-1 "foreign")
+(provide "WinSDK/c/crtdefs")
+(require "WinSDK/c/vadefs")

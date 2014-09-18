@@ -1,0 +1,1056 @@
+;;;
+;;; discrete.l
+;;;
+(require "util")
+(provide "discrete")
+
+;;;
+;;; temp-buffer
+;;;
+(if (fboundp 'temp-buffer)
+    (msgbox "`temp-buffer' という関数はすでに存在します。")
+  (defun temp-buffer ()
+    (interactive)
+    (set-buffer (create-new-buffer "*temp*"))
+    (setq need-not-save t)
+    (setq auto-save nil)))
+
+;;;
+;;; byte-compile-file mod
+;;;
+(defvar byte-compile-file-orig nil)
+
+(unless (functionp byte-compile-file-orig)
+  (setq byte-compile-file-orig (function byte-compile-file)))
+
+(defun byte-compile-file (filename)
+  (interactive "fByte compile file: " :default0 (get-buffer-file-name))
+  (if (interactive-p)
+      (progn
+        (funcall byte-compile-file-orig filename)
+        (lisp-mode))
+    (funcall byte-compile-file-orig filename)))
+
+
+;;;
+;;; kill-process-and-buffer
+;;;
+(defun kill-process-and-buffer ()
+  (interactive)
+  (let* ((buf (selected-buffer))
+         (proc (buffer-process buf)))
+    (when proc
+      (kill-process proc)
+      (sleep-for 0.5))
+    (kill-buffer buf)))
+
+;; ;;; to-use ;;;
+;; (add-hook 'ed::*shell-mode-hook*
+;;           #'(lambda ()
+;;               (define-key ed::*shell-mode-map* #\C-\d       'kill-process-and-buffer)
+;;               (define-key ed::*shell-mode-map* '(#\C-x #\k) 'kill-process-and-buffer)))
+
+
+;;;
+;;; switch-to-buffer-gnrr
+;;;
+(defun switch-to-buffer-gnrr ()
+  (interactive)
+  (bury-buffer))
+
+(global-set-key '(#\C-x #\b) 'switch-to-buffer-gnrr)
+
+;;;
+;;; find-path-from-top-directory
+;;;
+(defun find-path-from-top-directory (name dirs)
+  "name というファイル名をディレクトリ配下で検索して、フルパスを返す。存在しなければ nil を返す。
+同名ファイルが複数個存在したとしても、最初に見つけた1つしか返さない。
+検索対象のディレクトリはリストで与えてもよい。ディレクトリ名の検索には使えない。"
+  (flet ((get-path-list (dir wild)
+           (directory dir :absolute t :recursive t :file-only t :wild wild))
+         (name-filter (name path)
+           (let ((n (car (last (split-string path #\/)))))
+             (if (string-equal name n) path nil))))
+    (unless (consp dirs) (setq dirs (cons dirs nil)))
+    (let* ((ext (pathname-type name))
+           (w (if ext (concat "*." ext) "*"))
+          find)
+    (dolist (d dirs)
+      (when (file-exist-p d)
+        (setq find (find name (get-path-list d w) :test #'name-filter)))
+      (when find (return find))))))
+
+;;;
+;;; binding to test lisp code
+;;;
+(defun test-call ()
+  (interactive)
+  (test))
+
+(defun test ()
+  (dbg-msgbox 'dummy-test))
+
+(global-set-key #\M-\2 'test-call)
+
+;;;
+;;; pt
+;;;
+(defun pt ()
+  (interactive)
+  (message "~D" (point)))
+
+;;;
+;;; apropos mod
+;;;
+(defvar apropos-orig nil)
+
+(unless (functionp apropos-orig)
+  (setq apropos-orig (function apropos)))
+
+(defun apropos (string &optional print-key pred)
+  (interactive "sApropos(Regexp): " :default0 (word-near-point))
+  (if (interactive-p)
+      (progn
+        (funcall apropos-orig string print-key pred)
+        (lisp-mode))
+    (funcall apropos-orig string print-key pred)))
+
+;;; 
+;;; sort-line-region
+;;;
+(defun sort-line-region (from to &optional (test #'string-lessp))
+ (interactive "*r")
+ (if (< to from)
+	  (rotatef from to))
+ (let ((start nil) line result)
+	(while (string-match "^.*\n" (buffer-substring from to) start)
+		(setq start (match-end 0))
+		(push (match-string 0) line))
+	(setq line (stable-sort line test))
+	(dolist (item line result)
+	  (setq result (concat result item)))
+	(delete-region from to)
+	(insert result)))
+
+
+;;; 
+;;; bak
+;;;
+(defvar bak-max 999)
+
+(defun bak-difference-file-p (path1 path2)
+  ;(dbg-msgbox path1 path2)
+  (cond ((not (file-exist-p path1)) t)
+	((not (file-exist-p path2)) t)
+	((/= (file-length path1) (file-length path2)) t)
+	(t nil)
+	; todo: read both files and check differences each other
+	))
+
+(defun bak-suffixed-number (num)
+  (let ((f "~~~D,'0D"))
+    (format nil (format nil f (digit bak-max)) num)))
+
+(defun bak-get-oldest-suffix-number (curr suffix)
+  "return oldest suffix number."
+  (let ((new (concat curr suffix)))
+    (cond ((not (file-exist-p curr)) (error (format nil "not exist ~S" curr)))
+	  ((not (file-exist-p new)) 0)
+	  (t
+      (let ((n 1)
+	    candidate found)
+	(while (and (not found) (< n (1+ bak-max)))
+	  (setq candidate (concat new (bak-suffixed-number n)))
+	  (unless (file-exist-p candidate)
+	    (setq found (1- n)))
+	  (incf n))
+	found)))))
+
+(defun bak-shift-file (curr suffix num)
+  "e.g: x.bak -> x.bak001"
+  (let ((not-yet t)
+	(n num))
+    (while (> n 0)
+      (when (>= n bak-max)
+        (delete-file (concat curr suffix (bak-suffixed-number bak-max)))) ; rotate
+      (let ((curr (concat curr suffix (bak-suffixed-number n)))
+	    (next (concat curr suffix (bak-suffixed-number (1+ n)))))
+	(when (file-exist-p next) (error (format nil "already exists ~S" next)))
+	(unless (file-exist-p curr) (error (format nil "not exists ~S" curr)))
+	(rename-file curr next))
+      (decf n)))
+  (when (file-exist-p (concat curr suffix))
+    (rename-file (concat curr suffix) (concat curr suffix "001"))))
+
+(defun bak-1 (curr suffix)
+  (interactive)
+  ;(dbg-msgbox (bak-get-oldest-suffix-number curr suffix))
+  (let ((new (concat curr suffix)))
+    (if (bak-difference-file-p curr new)
+        (progn
+          (bak-shift-file curr suffix
+                          (bak-get-oldest-suffix-number curr suffix))
+          (copy-file curr new)    ; original --> ".bak"
+          (message "BAKed --> ~S" new))
+      (message "file has no changed. so that, no need to backup."))))
+    
+(defun bak ()
+  (interactive)
+  (let ((curr (get-buffer-file-name))
+	(suffix ".bak"))
+    (call-interactively #'(lambda (input)
+	(interactive "sBAK as: " :default0 (concat (get-buffer-file-name) ".bak"))
+        (unless (string-match (get-buffer-file-name) input) (error "file name will be changed, that is not backup. use `write-file'."))
+        (setq suffix (substitute-string input (get-buffer-file-name) ""))
+        (bak-1 curr suffix)))))
+
+;; old 
+;; (defun bak ()
+;;   (interactive)
+;;   (if (get-buffer-file-name)
+;;       (call-interactively #'(lambda (name)
+;;                               (interactive "sBAK as: " :default0 (concat
+;;                                                                   (get-buffer-file-name)
+;;                                                                   ".bak"))
+;;                               (write-file name)))
+;;     (call-interactively 'save-buffer)))
+
+;;; 
+;;; refer-for
+;;;
+(require "refer-for")
+(use-package "refer-for")
+(setq refer-for::*regexp-search* t)
+(setq refer-for::*msxml-prog-id* "Msxml2.DOMDocument.3.0")
+(define-key refer-for::*refer-for-mode-map* #\C-\h 'refer-for-last-search)
+(define-key refer-for::*refer-for-mode-map* #\n 'refer-for-next-chapter)
+(define-key refer-for::*refer-for-mode-map* #\p 'refer-for-previous-chapter)
+(define-key refer-for::*refer-for-mode-map* #\RET 'refer-for-jump)
+
+(defun h (&optional arg)
+  (interactive "p")
+  (if arg
+      (call-interactively 'refer-to-title-more)
+    (call-interactively 'refer-to-title-one)))
+
+(defun refer-to-title-one (s)  
+  (interactive "srefer-for: " :default0 (word-near-point))
+  (let ((refer-for::*regexp-search* t))
+    (refer-to-titles (concat "^" s "$"))))
+
+(defun refer-to-title-more (s)  
+  (interactive "srefer-for: " :default0 (word-near-point))
+  (let ((refer-for::*regexp-search* nil))
+    (refer-to-titles s)))
+
+(defvar *refer-for-jump-dir* `(,(merge-pathnames "lisp" (si:system-root))
+                               ,(merge-pathnames "site-lisp" (si:system-root)))
+  "reference の `File' の欄から *.l を検索するとき、検索対象のディレクトリを指定する。")
+
+(defvar *refer-for-jump-file-read-only* t
+  "reference の `File' の欄から *.l を開くとき、read-only にするかどうかを指定する。
+nil なら普通に開く。non-nil なら read-only で開く。")
+
+(defvar refer-for-jump-file-alist
+          '(("Accessor"     . 'ignore)
+            ("BufferLocal"  . 'ignore)
+            ("Keyword"      . 'ignore)
+            ("Macro"        . "^[ \t]*\([ \t]*defmacro[ \t]+XXNAMEXX[ \t]+\(") ; 改行も
+            ("Misc"         . 'ignore)
+            ("Special Form" . 'ignore)
+            ("Struct"       . "^[ \t]*\([ \t]*defstruct[ \t]+\([ \t]*XXNAMEXX[ \t]+")
+            ("Tips"         . 'ignore)
+            ("Variable"     . "^[ \t]*\([ \t]*defvar[ \t]+XXNAMEXX[ \t]+")
+            ("Function (interactive)" . "[ \t]*\([ \t]*defun[ \t]+XXNAMEXX[ \t]+")
+            ("Function"     . "[ \t]*\([ \t]*defun[ \t]+XXNAMEXX[ \t]+"))
+  "`Type'欄と、それをソースファイルから検索するときの正規表現テンプレートの alist。'ignore は「今のところ無視する」という印。")
+
+(defvar refer-for-jump-content-alist '((type    . "^\\[Type       \\]: \\(.+\\)$")
+                                       (name    . "^■\\(.+\\)$"))
+  "*Reference*バッファの欄のシンボルとその検索に使う正規表現の alist")
+
+(defun refer-for-jump-get-content ()
+  "ポイントが *Reference*バッファの`File'欄や`Type'欄の行にある場合、
+欄のシンボルとその後ろの文字列を取得し、多値で返す。見つけられなかった場合は nil を返す。
+例: 見つけた場合こんなのを返す 'seealso と \"buffer-read-only\""
+  (let ((lim (save-excursion (progn (goto-eol) (point)))))
+    (save-excursion
+      (goto-bol)
+      (if (scan-buffer "^\\[\\(.+\\) *\\]: *\\(.*\\)$" :regexp t :limit lim)
+          (let ((desc (string-trim " \t" (match-string 2)))
+                ;(header (make-symbol (nstring-downcase (substitute-string (match-string 1) "[ \t]+" "")))))
+                (header (intern (nstring-downcase (substitute-string (match-string 1) "[ \t]+" "")))))
+            (values header desc))))))
+
+(defun refer-for-jump-get-desc-at-point (sym)
+  "現在参照中のリファレンス項目の 文字列を取得する。
+例: 'type --> \"Function (interactive)\" を返す。"
+  (let ((re (cdr (assoc sym refer-for-jump-content-alist))))
+    (save-excursion
+      (when (scan-buffer re :regexp t :reverse t)
+        (string-trim " \t" (match-string 1))))))
+
+(defun refer-for-jump-file (file)
+  "reference の `File'欄から定義元のソースファイルを開く。"
+  (flet ((get-file-path (name)
+           (find-path-from-top-directory name *refer-for-jump-dir*)))
+    (let* ((type (refer-for-jump-get-desc-at-point 'type))
+           (name (refer-for-jump-get-desc-at-point 'name))
+           (re-template (cdr (assoc type refer-for-jump-file-alist :test #'string=))))
+      (cond ((null file))
+            ((string= file "builtin.l") (error "ビルトイン関数なので開きません。"))
+            ((null name) (error "reference の 項目名が見つかりません。"))
+            ((null type) (error "reference の Type が見つかりません。"))
+            ((null re-template) (error "Type: ~A には未対応です。" type))
+            ((eq re-template 'ignore))
+            (t
+             (let* ((path (get-file-path file))
+                    (buf-new (ed::find-file-internal path)))
+               (set-buffer buf-new)
+               (when *refer-for-jump-file-read-only*
+                 (setq buffer-read-only t))
+               (let ((re (substitute-string re-template "XXNAMEXX" name)))
+                 (unless (scan-buffer re :regexp t)
+                   (delete-buffer buf-new)
+                   (error "定義元が見つかりませんでした。")))))))))
+
+(defun refer-for-jump-seealso (name)
+  "オリジナルの refer-for-search-seealso とだいたい同機能 (ただし、re は無効)"
+  (let ((str (format nil "^~A$" (regexp-quote name))))
+    (refer-for::output (refer-for::search str :by-title t))
+    (refer-for::set-history str t)))
+
+;;; command
+(defun refer-for-jump ()
+  "ポイントがある行によって、いろんなところへ飛ぶ。
+`File'欄にあるときは、ソースファイルを検索する (refer-for-jump-file)
+`See also'欄にあるときは、そのリファレンス項目に移動する (refer-for-jump-seealso)"
+  (interactive)
+  (multiple-value-bind (header desc) (refer-for-jump-get-content)
+    (case header
+      ('seealso (refer-for-jump-seealso desc))
+      ('file (refer-for-jump-file desc)))))
+
+;;; 
+;;; grep-xyzzy-lisp
+;;;
+(defun grep-xyzzy-lisp (name)
+  (interactive "sName: " :default0 (word-near-point))
+  (let ((dir-list *load-path*))
+    (dolist (d dir-list)
+             (when (file-exist-p d)
+               (grep-xyzzy-lisp-scan-files name d))))
+  (switch-to-buffer "*grep*"))
+
+(defun grep-xyzzy-lisp-scan-files (name dir)
+  (let ((mask "*.l"))
+    (ed::scan-files name mask dir)))
+
+
+;;; 
+;;; forward-word-gnrr
+;;;
+(defun forward-word-gnrr ()
+  (interactive)
+  (forward-word 1)
+  (forward-char 1))
+
+(global-set-key #\M-f 'forward-word-gnrr)
+
+;;; 
+;;; word-near-point
+;;; 
+(defun word-near-point (&optional delimiter-char)
+  (let (beg end)
+    (if delimiter-char
+        (let ((dch (concat "^" (string delimiter-char))))
+          (save-excursion (save-restriction
+                            (narrow-to-line)
+                            (skip-chars-forward dch) (setq end (point))
+                            (skip-chars-backward dch) (setq beg (point)))))
+      (save-excursion
+        (skip-syntax-spec-forward "w_") (setq end (point))
+        (skip-syntax-spec-backward "w_") (setq beg (point))))
+    (buffer-substring beg end)))
+
+(defun near-point ()
+  (interactive)
+  (message (word-near-point)))
+
+;;;
+;;; next-page, previous-page
+;;;
+(defun next-page-gnrr ()
+  (interactive)
+  (let ((end-line (+ (get-window-start-line) (window-lines))))
+    (next-page)
+    (when (> end-line (buffer-lines))
+      (goto-char (point-max)))))
+
+(global-set-key #\M-n 'next-page-gnrr)
+
+(defun previous-page-gnrr ()
+  (interactive)
+  (let ((start-line (get-window-start-line)))
+    (previous-page)
+    (when (= start-line 1)
+      (goto-char (point-min)))))
+
+(global-set-key #\M-p 'previous-page-gnrr)
+
+
+;;;
+;;; comment-region
+;;;
+(defun comment-region ()
+  (interactive)
+  (comment-out-region))
+
+
+;;;
+;;; toggle-truncate-lines
+;;;
+(defun toggle-truncate-lines (&optional dir)
+  (interactive "p")
+  (let* ((table `((nil                 . "折り返し: なし")
+                  (t                   . "折り返し: ウィンドウ幅")
+                 ;(,buffer-fold-widhth . "指定位置で折り返し"))))
+                  ))
+         (current (nth (mod (+ (position (buffer-fold-width) table :test (lambda (x y) (eql x (car y)))) (if dir 1 -1))
+                            (length table))
+                       table)))
+    (set-buffer-fold-width (car current))
+    (message (cdr current))))
+
+(global-set-key '(#\C-x #\t) 'toggle-truncate-lines) ; C-x t
+
+
+;;;
+;;; toggle-narrowing-region
+;;;
+(defvar-local *narrowing-region-state* nil)
+
+(defun toggle-narrowing-region ()
+  (interactive)
+  (flet ((mark-beg ()
+           (let ((mk (mark t)))
+             (if mk mk 0))))
+    (if *narrowing-region-state*
+        (widen)
+      (narrow-to-region (mark-beg) (point))))
+  (setq *narrowing-region-state* (not *narrowing-region-state*))
+  (message (if *narrowing-region-state* "> narrowed. <"
+             "< widened. >")))
+
+(global-set-key '(#\C-x #\n #\n) 'toggle-narrowing-region)
+(global-unset-key '(#\C-x #\n #\w))
+;;領域外の色は Windows のシステムカラーの使用不可の項目
+
+;; ついでに、1行 narrowing も入れとく
+(defun narrow-to-line ()
+  (save-excursion
+    (let ((beg (progn (goto-bol) (point)))
+          (end (progn (goto-eol) (point))))
+        (narrow-to-region beg end))))
+
+;;;
+;;; count-line
+;;;
+(defun count-line (from to)
+  (interactive "*r")
+  (let (lbeg lend lcnt wbeg wend wcnt cbeg cend ccnt)
+    (save-excursion
+      (setq lbeg (progn (goto-char from) (current-line-number)))
+      (setq lend (progn (goto-char to) (current-line-number)))
+
+      (setq wbeg (progn (goto-char from) 0)) ; fix it
+      (setq wend (progn (goto-char to) 0))   ; fix it
+
+      (setq cbeg (progn (goto-char from) (point)))
+      (setq cend (progn (goto-char to) (point))))
+
+    (setq lcnt (abs (- lbeg lend)))
+    (setq wcnt (abs (- wbeg wend)))
+    (setq ccnt (abs (- cbeg cend)))
+    (if (interactive-p)
+        (message "line: ~D, word: ~D, character: ~D" lcnt wcnt ccnt)
+      (values lcnt wcnt ccnt))))
+
+
+;;;
+;;; todo
+;;;
+(defvar todo-file "~/Dropbox/todo.txt")
+
+(defun todo ()
+  (interactive)
+  (find-file todo-file))
+
+
+;;;
+;;; find-file-gnrr
+;;;
+(defun find-file-gnrr (fn)
+  (interactive "FFind file: ")
+  (cond ((file-exist-p fn)       (find-file fn))
+        ((y-or-n-p "new file? ") (find-file fn))))
+
+(define-key ctl-x-map #\C-\f 'find-file-gnrr)
+
+
+;;;
+;;; cmd.exe
+;;;
+(defun c ()
+  (interactive)
+  (let* ((fn (get-buffer-file-name))
+         (ed::*launch-app-directory* (if fn (directory-namestring fn)
+                                       (si:system-root))))
+    (run-console)))
+
+;;;
+;;; explorer.exe
+;;;
+(defun open-explorer (fn)
+  "fn で与えたファイルを含むディレクトリをエクスプローラでフォルダを開く。
+fn が nil なら xyzzy のインストールディレクトリを開く"
+  (flet ((get-arg ()
+           (if fn (concat "/e,/select," (map-slash-to-backslash fn))
+             (concat "/e," (map-slash-to-backslash (si:system-root))))))
+    (call-process
+     (concat (get-windows-directory) "explorer " (get-arg)))))
+
+(defun e ()
+  "エクスプローラでフォルダを開く。
+ポイント付近がフルパス文字列なら、それを開く。
+そうでなく、バッファがファイルを持っていたらそれを開く。
+さもなければ、xyzzy のインストールディレクトリを開く。"
+  (interactive)
+  (let ((buf-file (get-buffer-file-name))
+        (file-str (word-near-point #\")))
+    ;(dbg-msgbox buf-file file-str)))
+    (cond ((file-exist-p file-str) (open-explorer file-str))
+          ((file-exist-p buf-file) (open-explorer buf-file))
+          ((null buf-file) (open-explorer nil))
+          (t (message "not exist ~A or ~A" file-str buf-file)))))
+
+
+;;;
+;;; hatena-insert
+;;;
+(defvar *hatena-insert-alist* '((">|lisp|\n||<"  . "スーパー pre lisp")
+                                ;(">||\n||<"      . "スーパー pre")
+                                ("[:title=ココ]" . "リンク")
+                                ("<br>"          . "改行")                                
+                                ("(())"          . "脚注")
+                                (">>\n<<"        . "引用")
+                                ;("-"             . "リスト")
+                                ;("+"             . "リスト 番号つき")
+                                ("**"            . "小見出し")
+                                ("><hr><"        . "区切り線")))
+
+(defvar *hatena-insert-last-num* 0)
+
+(defun hatena-insert ()
+  (interactive)
+  (let ((lst *hatena-insert-alist*))
+    (setq *hatena-insert-last-num*
+          (if (eq *last-command* 'hatena-insert)
+              (progn
+                (delete-char (1+ (length (car (nth *hatena-insert-last-num* lst)))))
+                ;(delete-char (length (car (nth *hatena-insert-last-num* lst))))
+                (mod (incf *hatena-insert-last-num*) (length *hatena-insert-alist*)))
+            0))
+    (let ((e (nth *hatena-insert-last-num* lst)))
+      (save-excursion (insert (car e) "\n"))
+      ;(save-excursion (car e))
+      (message "~D/~D ~A" (1+ *hatena-insert-last-num*) (length *hatena-insert-alist*)
+               (cdr e)))))
+
+(global-set-key #\M-3 'hatena-insert)
+
+
+;;;
+;;; trace
+;;; http://www.geocities.jp/kiaswebsite/xyzzy/encap.html
+; (trace function1 function2 ...) makes the functions `traced'.
+; (trace) returns `traced' functions.
+; (untrace function1 function2 ...) makes the functions `untraced'. 
+; (untrace) makes all `traced' functions `untraced'.
+
+(require "encap")
+
+(defvar *trace-function-list* nil)
+(defvar *trace-depth* 0)
+
+(defun trace-encap (func)
+  (unless (encapsulated-p func 'traced-function)
+    (encapsulate func 'traced-function
+                 `(
+                   ;(ed::setup-trace-output-buffer)
+                   (setq *trace-depth* (1+ *trace-depth*))
+                   ;(format *error-output* "~ACalling ~S~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) (cons ',func argument-list))
+                   (format t "~ACalling ~S~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) (cons ',func argument-list))
+                   (let ((#1=#:result (multiple-value-list (apply basic-definition argument-list))))
+                     ;(format *error-output* "~A~S returned~{ ~A~}~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) ',func #1#)
+                     (format t "~A~S returned~{ ~A~}~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) ',func #1#)
+                     (setq *trace-depth* (1- *trace-depth*))
+                     (values-list #1#))))
+    (push func *trace-function-list*)
+    func))
+
+(defun trace-unencap (func)
+  (when (encapsulated-p func 'traced-function)
+    (unencapsulate func 'traced-function)
+    (setq *trace-function-list* (remove func *trace-function-list* :test #'eq))
+    func))
+
+(defmacro trace (&rest args)
+  (setq *trace-depth* 0)        ; add
+  (if (null args)
+      '*trace-function-list*
+    `(let (lst)
+       (dolist (func ',args (reverse lst))
+         (when (trace-encap func)
+           (setq lst (cons func lst)))))))
+
+(defmacro untrace (&rest args)
+  (if (null args)
+      '(let (lst)
+        (dolist (func *trace-function-list* lst)
+          (when (trace-unencap func)
+            (setq lst (cons func lst)))))
+    `(let (lst)
+       (dolist (func ',args (reverse lst))
+         (when (trace-unencap func)
+           (setq lst (cons func lst)))))))
+
+
+;;;
+;;; 行を複製(二重化)する
+;;; 
+(defun replica-line ()
+  (interactive "*")
+  (save-excursion
+    (insert (buffer-substring (progn (goto-eol) (point))
+                              (progn (goto-bol) (point))))
+    (newline)))
+
+(global-set-key #\M-\= 'replica-line)
+
+
+;;;
+;;; windows のクリップボードと kill-ring を同期させる
+;;; 
+;;synclonize clipboad and kill-ring
+(defun copy-selection-region-to-clipboard ()
+  (interactive)
+  (setq is-selected nil)
+  (if (and *shodat-copy-mode*
+    (pre-selection-p))
+    (let ((type (get-selection-type)))
+      (selection-start-end (start end)
+      (copy-region-as-kill start end)
+      (copy-region-to-clipboard start end)
+      (setq is-selected t)
+      (start-selection type t end)))
+  (selection-start-end (start end)
+    (copy-region-as-kill start end)
+    (copy-region-to-clipboard start end)
+    (setq is-selected t)))
+  (if (eq is-selected nil)
+    (progn
+      (copy-region-as-kill (mark) (point))
+      (copy-region-to-clipboard (mark) (point))))
+t)
+
+(defun kill-selection-region-to-clipboard ()
+  (interactive "*")
+  (setq is-selected nil)
+  (selection-start-end (start end)
+    (copy-region-as-kill start end)
+    (kill-region-to-clipboard start end)
+    (setq is-selected t))
+  (if (eq is-selected nil)
+    (progn
+      (copy-region-as-kill (mark) (point))
+      (kill-region-to-clipboard (mark) (point))))
+t)
+
+(defun kill-line-to-clipboard ()
+  "kill line to clipboard"
+  (interactive)
+  (setq kill-line-to-clipboard-start (point))
+  (end-of-line)
+  (if (eq kill-line-to-clipboard-start (point))
+    (delete-char)
+    (progn
+      (copy-region-as-kill kill-line-to-clipboard-start (point))
+      (kill-region-to-clipboard kill-line-to-clipboard-start (point)))))
+
+(define-key *global-keymap* #\C-w 'kill-selection-region-to-clipboard )
+(define-key *global-keymap* #\M-w 'copy-selection-region-to-clipboard )
+(define-key *global-keymap* #\C-y 'paste-from-clipboard )
+(define-key *global-keymap* #\C-k 'kill-line-to-clipboard )
+
+
+;;;
+;;; M-x help でリファレンスを開く
+;;;
+(defun help ()
+  (interactive)
+  (reference-show))
+
+;;;
+;;; execute-extended-command
+;;; http://d.hatena.ne.jp/x68kace/20080317/p2
+;; ; M-x で入力したコマンドにショートカットキーがあれば教える
+;; (defun execute-extended-command (command &optional raw arg)
+;;   (interactive "0CM-x: \nP\np")
+;;   (let ((*prefix-args* raw)
+;;     (*prefix-value* arg))
+;;     (setq *last-complex-command* nil)
+;;     (setq *this-command* command)
+;;     (command-execute command (and (interactive-p)
+;;                   (not *executing-macro*)
+;;                   #'ed::record-complex-command))
+;;                     ;ここから上書き
+;;     (let ((global (command-keys command *global-keymap* nil))
+;;       (local (command-keys command *global-keymap* (local-keymap)))
+;;       (minor (command-keys command *global-keymap* (local-keymap) (minor-mode-map))))
+;;       (when minor
+;;     (message "You can run the command '~A' with ~S (~A)"
+;;          command
+;;          (key-to-string (car minor))
+;;          (cond (global "global")
+;;                (local "local")
+;;                (t "minor")))
+;;     (sit-for 3)))))
+
+;;;
+;;; comment-line-and-next-line
+;;;
+(require "comment")
+
+;; http://hie.s64.xrea.com/xyzzy/note/edit.html#toggle-one-line-comment
+(defvar *one-line-comment-alist*
+  '((awk-mode     . ("#"))
+    (css-mode     . ("/* " " */"))
+    (c-mode       . ("/* " " */"))       ; mod
+    (c++-mode     . ("//"))              ; mod
+    (csharp-mode  . ("//"))              ; mod
+    (html+-mode   . ("<!-- " " -->"))
+    (lisp-mode    . (";"))
+    (lisp-interaction-mode . (";"))
+    (scheme-mode  . (";"))               ; mod
+    (scheme-interaction-mode . (";"))    ; mod
+    (perl-mode    . ("#"))
+    (php-mode     . ("//"))
+    (sql-mode     . ("--"))))
+
+(defun toggle-one-line-comment ()
+  ; (interactive)                       ; mod
+  (let ((li (cdr (assoc buffer-mode *one-line-comment-alist*)))
+        bol eol str keyreg)
+    (when li
+      (save-excursion
+        (goto-eol)
+        (setq eol (point))
+        (back-to-indentation)
+        (setq bol (point))
+        (setq str (buffer-substring bol eol))
+        (if (= (length li) 1)
+            (let ((key (car li)))
+              (setq keyreg (format nil "^~A+[ \t]*" (regexp-quote key)))
+              (if (string-match keyreg str)
+                  (delete-region (+ bol (match-beginning 0))
+                                 (+ bol (match-end 0)))
+                (progn
+                  (back-to-indentation) (insert key))))
+          (let ((key1 (car li))
+                (key2 (cadr li)))
+            (setq keyreg (format nil
+                                 "^\\(~A\\)+[ \t]*\\(.*\\)[ \t]*\\(~A\\)+$"
+                                 (regexp-quote key1)
+                                 (regexp-quote key2)))
+            (if (string-match keyreg str)
+                (progn
+                  (setq str (string-replace-match str "\\2"))
+                  (delete-region (+ bol (match-beginning 0))
+                                 (+ bol (match-end 0)))
+                  (insert str))
+              (progn
+                (back-to-indentation) (insert key1)
+                (goto-eol) (insert key2)))))))))
+
+;; add
+(defun comment-line-and-next-line ()
+  (interactive)
+  (toggle-one-line-comment)
+  (next-line))
+
+(global-set-key #\M-\; 'comment-line-and-next-line)
+
+;;;
+;;; indent-for-comment-gnrr
+;;;
+(defun indent-for-comment-gnrr (&optional arg)
+  (interactive "p")
+  (if arg
+      ;; set-comment-column
+      (let ((col (current-column)))
+        (setq comment-column col)
+        (message "set to ~D." col))
+    (indent-for-comment)))
+
+(global-set-key #\C-\; 'indent-for-comment-gnrr)
+
+
+;;;
+;;; isearch-forward-gnrr
+;;; use regexp or fixed string in isearch
+;;;
+(defun isearch-forward-gnrr (&optional re)
+  (interactive "p")
+  (setq *isearch-scanner-hook* #'(lambda (p) (setq ed::*isearch-regexp* (if re t nil)) p))
+  (call-interactively 'isearch-forward))
+
+(defun isearch-backward-gnrr (&optional re)
+  (interactive "p")
+  (setq *isearch-scanner-hook* #'(lambda (p) (setq ed::*isearch-regexp* (if re t nil)) p))
+  (call-interactively 'isearch-backward))
+
+(global-set-key #\C-s 'isearch-forward-gnrr)
+(global-set-key #\C-r 'isearch-backward-gnrr)
+
+;;; use regexp or fixed string in query-replace
+(defun query-replace-gnrr (&optional re)
+  (interactive "p")
+  (if re
+      (call-interactively 'query-replace-regexp)
+    (call-interactively 'query-replace)))
+
+(global-set-key #\M-% 'query-replace-gnrr)
+
+;;;
+;;; ミニバッファに入ったとき IME を OFF にする
+;;;
+(export '(*ime-mode-into-minibuffer*))
+(defvar *ime-mode-into-minibuffer* nil)
+
+(defun ime-state-get-and-setoff (bef-buffer file-name)
+  (interactive)
+  (setq *ime-mode-into-minibuffer* (get-ime-mode))
+  (toggle-ime nil))
+
+(defun ime-state-set (bef-buffer file-name)
+  (interactive)
+  (toggle-ime *ime-mode-into-minibuffer*))
+
+(add-hook '*enter-minibuffer-hook* 'ime-state-get-and-setoff)
+(add-hook '*exit-minibuffer-hook*  'ime-state-set)
+
+
+;;;
+;;; find-file-frequently
+;;;
+(defvar *find-file-frequently-list* '((merge-pathnames ".xyzzy" (user-homedir-pathname))
+                                      (append-trail-slash (path-delim-to-slash (get-special-folder-location :desktop)))
+                                      (default-directory)))
+
+(defvar *find-file-frequently-count* 0)
+
+(add-hook '*enter-minibuffer-hook*
+          #'(lambda (buf his)
+              (setq *find-file-frequently-count* 0)))
+
+(defun find-file-frequently-sort-function (x y)
+  (cond ((and (not (file-directory-p x)) (file-directory-p y)) t)
+        ((and (file-directory-p x) (not (file-directory-p y))) nil)
+        (t (string-length-lessp x y))))
+
+(defun find-file-frequently ()
+  (interactive)
+  (let ((old (buffer-substring (point-min) (point-max)))
+        (lst (mapcar #'truename-mod (mapcar #'eval *find-file-frequently-list*))))
+    (let ((s (nth (mod *find-file-frequently-count* (length lst))
+                  (sort lst #'find-file-frequently-sort-function))))
+      (if (or (string= s old)
+              (find s (mapcar #'get-buffer-file-name (buffer-list)) :test 'string=))
+          (progn
+            (incf *find-file-frequently-count*)
+            (find-file-frequently))
+        (progn
+          (delete-region (point-min) (point-max))
+          (insert s)
+          (incf *find-file-frequently-count*))))))
+
+(define-key ed::minibuffer-local-completion-map #\C-\f #'(lambda () (interactive)
+                                                           (if (= (point) (point-max))
+                                                               (find-file-frequently)
+                                                             (forward-char 1))))
+
+(setq *find-file-frequently-list* (append *find-file-frequently-list*
+                                          '("~/Dropbox/lisp/")))
+
+
+;;;
+;;; adjust-spaces
+;;; 
+(defun adjust-spaces ()
+  (interactive)
+  (let ((end (save-excursion (progn (skip-syntax-spec-forward " ") (point))))
+        (beg (save-excursion (progn (skip-syntax-spec-backward " ") (point))))
+        (bol (save-excursion (progn (goto-bol) (point))))
+        (cic (get-indent-column-current-line))
+        (pic (get-indent-column-previous-line)))
+    (cond ((and (= beg end) (char= (preceding-char) #\LFD))  
+           (delete-backward-char 1) (adjust-spaces) (just-one-space))
+          ((and (/= cic pic) (< beg end) (= beg bol) (< pic end))
+           (delete-region beg end) (insert (make-sequence 'string pic :initial-element #\SPC)))
+          ((< beg end) (delete-region beg end))
+          (t (just-one-space) (skip-white-backward)))))
+
+(defun get-indent-column-current-line ()
+  (save-excursion
+      (goto-bol)
+      (skip-white-forward)
+      (current-column)))
+
+(defun get-indent-column-previous-line ()
+  (save-excursion
+    (when (forward-line -1)
+      (goto-bol)
+      (skip-white-forward)
+      (current-column))))
+
+(global-set-key #\M-SPC 'adjust-spaces)
+
+
+;;;
+;;; kill-buffer-gnrr
+;;; 
+(defun kill-buffer-gnrr ()
+  (interactive)
+  (kill-buffer (selected-buffer)))
+
+(global-set-key '(#\C-x #\k) 'kill-buffer-gnrr)
+
+
+;;;
+;;; eval-buffer mod
+;;;
+(defvar eval-buffer-orig nil)
+
+(unless (functionp eval-buffer-orig)
+  (setq eval-buffer-orig (function eval-buffer)))
+
+(defun eval-buffer (&optional buf)
+  (interactive)
+  (if (interactive-p)
+      (funcall eval-buffer-orig (selected-buffer))
+    (funcall eval-buffer-orig buf)))
+
+;(eval-buffer (selected-buffer)) と書かれてるバッファで C-j すると無限ループになる
+;                                そんなときは C-g すべし(コメントにしとけば問題なし)
+
+
+;;;
+;;; insert ()
+;;;
+(defun insert-paired-paren ()
+  (interactive)
+  (insert "()")
+  (forward-char -1))
+
+(global-set-key #\M-9 'insert-paired-paren)
+
+
+;;;
+;;; insert [] or {}
+;;;
+(defvar *insert-paired-bracket-state* nil)
+(defun insert-paired-bracket ()
+  (interactive)
+  (if (eq *last-command* 'insert-paired-bracket)
+      (progn
+        (forward-char -1)
+        (delete-char 2)
+        (notf *insert-paired-bracket-state*))
+    (setq *insert-paired-bracket-state* nil))
+  (if *insert-paired-bracket-state*
+      (insert "[]")
+    (insert "{}"))
+  (forward-char -1))
+
+(global-set-key #\M-\[ 'insert-paired-bracket)
+
+
+;;;
+;;; insert '' or ""
+;;;
+(defvar *insert-paired-quote-state* nil)
+(defun insert-paired-quote ()
+  (interactive)
+  (if (eq *last-command* 'insert-paired-quote)
+      (progn
+        (forward-char -1)
+        (delete-char 2)
+        (notf *insert-paired-quote-state*))
+    (setq *insert-paired-quote-state* nil))
+  (if *insert-paired-quote-state*
+      (insert "\"\"")
+    (insert "\'\'"))
+  (forward-char -1))
+
+(global-set-key #\M-\' 'insert-paired-quote)
+
+
+;;;
+;;; jump-to-paren
+;;;
+(defun jump-to-paren ()
+ "jump to the matching parenthesis if on parenthesis."
+ (interactive)
+  (cond ((looking-at "[([{]") (forward-sexp 1))
+        ((save-excursion
+           (forward-char -1)
+           (looking-at "[])}]")) (backward-sexp 1))
+        ((looking-at "[])}]") (forward-char) (backward-sexp 1))
+        (t nil)))
+
+(global-set-key #\M-\] 'jump-to-paren)
+
+
+;;;
+;;; undo-redo
+;;;
+(defun undo-redo-gnrr (&optional arg)
+  (interactive "p")
+  (if arg
+      (redo)
+    (undo)))
+
+(global-set-key #\C-z 'undo-redo-gnrr)
+
+
+;;;
+;;; save-buffer-gnrr
+;;;
+(defun write-file-tmp (fn)
+  (interactive "FWrite: "
+    :default0 (concat (append-trail-slash (path-delim-to-slash (get-special-folder-location :desktop)))
+                      (substitute-string (buffer-name (selected-buffer)) "[* ]" "") "_"))
+  (write-file fn))
+
+(defun save-buffer-gnrr ()
+  (interactive)
+  (if (get-buffer-file-name)
+      (call-interactively 'save-buffer)
+    (call-interactively 'write-file-tmp)))
+      
+(global-set-key '(#\C-x #\C-\s) 'save-buffer-gnrr)
+
+
+;;; discrete.l ends here

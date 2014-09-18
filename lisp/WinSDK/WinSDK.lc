@@ -1,0 +1,5 @@
+(provide "WinSDK/WinSDK")
+(require "WinSDK/api/Windows")
+(require "WinSDK/api/CommCtrl")
+(require "WinSDK/api/ShlObj")
+(require "WinSDK/utility")

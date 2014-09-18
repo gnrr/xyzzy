@@ -1,0 +1,5 @@
+(require "WinSDK/windows")
+(lisp::in-package-1 "winapi")
+(require "WinSDK/api/Windows")
+(provide "WinSDK/api/Rpc")
+(require "WinSDK/api/BaseTsd")

@@ -1,0 +1,4 @@
+(require "WinSDK/windows")
+(lisp::in-package-1 "winapi")
+(provide "WinSDK/api/WinSCard")
+(require "WinSDK/api/WTypes")

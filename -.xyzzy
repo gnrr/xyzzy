@@ -1,0 +1,9 @@
+;;; .xyzzy for thinkpad
+;;;
+;;; install xyzzy
+;;;   1. create short-cut-icon for xyzzy.exe
+;;;   2. プロパティ / 作業フォルダ --> C:\Users\g\Documents
+;;;   3. copy this file to C:/Users/g/
+;;;
+(push "C:/Users/g/Dropbox/lisp" *load-path*)
+;;bb

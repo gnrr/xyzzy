@@ -1,0 +1,5 @@
+(require "WinSDK/windows")
+(lisp::in-package-1 "winapi")
+(provide "WinSDK/api/PrSht")
+(system:*fset 'SNDMSG #'SendMessage)
+(export 'SNDMSG)

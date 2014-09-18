@@ -1,0 +1,707 @@
+;;; -*- Mode: Lisp; Package: editor -*-
+
+;;;
+;;; dot.xyzzy
+;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; environment
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(push "~/Dropbox/lisp/" *load-path*)    ; load-path
+;(push "d:/shishido/lisp/" *load-path*) ; load-path
+
+;(toggle-trace-on-error)            ; for debug
+(require "elisp")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; keybind
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;(global-set-key #\M-p 'previous-page)
+;(global-set-key #\M-n 'next-page)
+(global-set-key '(#\C-x #\C-\.) 'next-buffer)
+(global-set-key '(#\C-x #\C-\,) 'previous-buffer)
+;(global-set-key #\M-P 'beginning-of-buffer)
+;(global-set-key #\M-N 'end-of-buffer)
+;(global-set-key #\M-h 'backward-kill-word)
+;; (global-set-key #\M-% 'query-replace)  ;; --> query-replace-gnrr
+(global-set-key #\C-M-\\ 'indent-region)
+;(substitute-key-definition 'next-virtual-line 'next-line)
+;(substitute-key-definition 'previous-virtual-line 'previous-line)
+(global-set-key '(#\C-x #\C-b) 'select-buffer) ; /w GUI
+;(global-set-key #\M-SPC 'just-one-space)
+(global-set-key '(#\C-x #\3) 'split-window-vertically)
+(global-set-key '#\M-k 'describe-key)
+
+
+(global-unset-key #\M-1)
+(global-unset-key #\M-2)
+(global-unset-key #\M-3)
+(global-unset-key #\M-4)
+(global-unset-key #\M-5)
+(global-unset-key #\M-6)
+(global-unset-key #\M-7)
+(global-unset-key #\M-8)
+(global-unset-key #\M->)          ; end-of-buffer
+(global-unset-key #\M-<)          ; beginning-of-buffer
+(global-unset-key #\M-0)
+(global-unset-key #\C-\\)         ; undo
+(global-unset-key #\C-_)          ; redo
+(global-unset-key #\C-v)
+(global-unset-key #\M-v)
+(global-unset-key #\C-t)          ; transpose-chars
+(global-unset-key #\M-\\)         ; shift-r-region-hold
+(global-unset-key '(#\C-x #\C-z)) ; shrink-window
+;; (global-unset-key '(#\C-x #\f))  ; set-fill-column
+(global-unset-key '(#\C-x #\a))   ; set-variable
+(global-unset-key '(#\C-x #\w))   ; widen
+(global-unset-key '(#\C-x #\z))   ; enlarge-window
+(global-unset-key '(#\C-x #\{))   ; shrink-window-horizontally
+(global-unset-key '(#\C-x #\}))   ; enlarge-window-horizontally
+(global-unset-key '(#\C-x #\c))   ; run-console
+(global-unset-key '(#\C-x #\C-a)) ; add-mode-abbrev
+(global-unset-key '(#\C-x #\C-h))
+(global-unset-key '(#\C-x #\C-o))
+(global-unset-key '(#\C-x #\C-p)) ; mark-page
+(global-unset-key '(#\C-x #\C-u)) ; upcase-region
+(global-unset-key '(#\C-x #\C-l)) ; downcase-region
+(global-unset-key '(#\C-x #\C-t)) ; transpose-lines
+(global-unset-key '(#\C-x #\C-n)) ; rename
+
+(global-unset-key '(#\C-c #\C-c)) ; rewind-ime-composition
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; unbind disused functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defvar unused-func-list '(
+                           ;; add disused function name
+
+                           ))
+
+(let ((lst unused-func-list))
+  (while lst
+    (fmakunbound (car lst))
+    (setq lst (cdr lst))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; setting
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; dynamic abbreviation
+(require "dabbrev")
+(global-set-key #\M-/ 'dabbrev-expand)
+
+; isearch (C-s, C-r)
+(require "isearch")
+
+; undo (default 1000 times)
+(setq kept-undo-information 5000)
+
+;; paren
+(require "paren")
+(setq-default *paren-attribute* '(:background 6))
+(setq-default *paren-paren-attribute* '(:background 2))
+(turn-on-global-paren)
+
+(defun goto-matched-parenthesis-gnrr ()
+  (interactive)
+  (let ((pre nil)
+        (post nil))
+    (if (or (char= (preceding-char) #\})
+              (char= (preceding-char) #\)))
+        (setq pre t)
+      (when (or (char= (char-after (point)) #\{)
+                (char= (char-after (point)) #\())
+        (setq post t)))
+    (if pre (backward-char 1))
+    (goto-matched-parenthesis)
+    (if post (forward-char 1))))
+(global-set-key #\M-] 'goto-matched-parenthesis-gnrr)
+
+
+;;; main menu
+(defvar *main-menu* *app-menu*)
+
+(defun toggle-main-menu ()
+  (interactive)
+  (set-menu (setq *main-menu* (if *main-menu* nil *app-menu*))))
+
+(add-hook '*post-startup-hook*
+          #'(lambda ()
+              (set-menu (setq *main-menu* nil))))
+
+(setq *my-menu*
+      (define-popup-menu
+        (:item nil "メインメニューを表示(&M)" 'toggle-main-menu)))
+
+(setq *app-popup-menu* *my-menu*)
+
+
+; change character encoding
+(global-set-key '(#\C-x #\RET #\f) 'change-fileio-encoding)
+
+;; ステータスバー関連
+;; http://www1.odn.ne.jp/ymtz/tips.html#statusbar
+;; ステータスバーにASCII／UNICODE／行番号／桁位置とか表示できます。
+(setq *status-bar-format* "cpt")
+
+
+;; tab --> spaces
+(setq indent-tabs-mode nil)
+(setq *c-indent-tabs-mode* nil)
+(setq *lisp-indent-tabs-mode* nil)
+;;(setq *py-indent-tabs-mode* nil)
+
+;; バッファ移動をタブ順に
+(setq *next-buffer-in-tab-order* t)
+
+;; タイトルバー
+(setq-default title-bar-format "%#F - %p")
+
+
+
+
+;; statusバーに文字コードを
+;(setq *status-bar-format* "%t%c%u")
+
+;; c-mode
+(push '("\\.cpp$" . c++-mode) *auto-mode-alist*)
+
+;; 誰かが勝手にファイルを変更しています。ディスクから読み直しますか？
+;; を常に「はい」にする
+;; http://xyzzy.s53.xrea.com/wiki/index.php?%BC%C1%CC%E4%C8%A2%2F185
+(setq-default verify-visited-file-modtime :auto)
+
+;; ; BSD style, tab 4
+;; (setq c-indent-level 4)                 ; 元々は 2
+;; (setq c-continued-statement-offset 4)   ; 元々は 2
+;; (setq c-brace-offset -4)                ; 元々は 0
+;; (setq c-argdecl-indent 4)               ; 元々は 5
+;; (setq c-label-offset -2)                ; 元々は-2
+;; (setq c-brace-imaginary-offset 0)
+
+;; lisp-mode
+(in-package "editor")
+
+(defvar *lisp-keyword-hash-table* nil)
+
+(defun use-lisp-keyword ()
+  "キーワード色付け"
+  (if (null *lisp-keyword-hash-table*)
+      (setq *lisp-keyword-hash-table*
+            (load-keyword-file "lisp")))
+  (when *lisp-keyword-hash-table*
+    (make-local-variable 'keyword-hash-table)
+    (setq keyword-hash-table *lisp-keyword-hash-table*)))
+
+(add-hook '*lisp-mode-hook*
+          #'(lambda ()
+              (use-lisp-keyword)
+              (define-key *lisp-mode-map* #\C-. 'lisp-complete-symbol)))
+
+(add-hook '*lisp-interaction-mode-hook*
+          #'(lambda ()
+              (use-lisp-keyword)
+              (define-key *lisp-interaction-mode-map* #\C-. 'lisp-complete-symbol)))
+
+(in-package "user")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; hooks
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; .lnkを展開する
+;; http://xyzzy.s53.xrea.com/wiki/index.php?tips%2F.lnk%A4%F2%C5%B8%B3%AB%A4%B9%A4%EB
+(add-hook '*before-find-file-hook*
+ #'(lambda (x)
+     (let ((sh (ignore-errors (resolve-shortcut x))))
+       (when sh
+         (find-file sh)
+         (get-file-buffer sh)))))
+
+;; 保存時に行末の空白を削除する
+;; http://xyzzy.s53.xrea.com/wiki/index.php?tips%2F%CA%DD%C2%B8%BB%FE%A4%CB%B9%D4%CB%F6%A4%CE%B6%F5%C7%F2%A4%F2%BA%EF%BD%FC%A4%B9%A4%EB
+(defvar *delete-trailing-spaces-disable* nil)
+(defvar *delete-trailing-spaces-disable-exts* '())
+
+(defun delete-trailing-spaces-at-save ()
+  (unless (or (find-load-path "auto-save-buffers")
+               (and (boundp 'ed::*auto-save-buffers-p*)
+                    ed::*auto-save-buffers-p*)
+              *delete-trailing-spaces-disable*
+              (find (pathname-type (get-buffer-file-name)) *delete-trailing-spaces-disable-exts* :test 'string=)
+               buffer-read-only)
+    (save-excursion
+      (goto-char (point-min))
+      (replace-buffer "[ \t]+$" "" :regexp t)))
+  nil)
+
+(add-hook '*before-save-buffer-hook* 'delete-trailing-spaces-at-save)
+
+(setq *delete-trailing-spaces-disable-exts* '("c" "h"))
+(setq *delete-trailing-spaces-disable* nil)  ;; t: disable all
+
+;; diff-mode
+(add-hook 'ed::*diff-mode-hook* 'turn-off-paren)
+
+
+
+;; find-file-hook
+(add-hook 'ed::*find-file-hooks* #'(lambda ()
+                                     ;; (setq buffer-read-only t)
+                                     (set-buffer-fold-width nil)
+                                     (abbrev-mode t)))
+;; perl-mode
+(add-hook 'ed::*perl-mode-hook* #'(lambda ()
+                                   (set-tab-columns 4 (selected-buffer))))
+
+
+;; c-mode
+(setq c-indent-level 4)                 ; 元々は 2
+(setq c-continued-statement-offset 4)   ; 元々は 2
+(setq c-brace-offset -4)                ; 元々は 0
+(setq c-argdecl-indent 4)               ; 元々は 5
+(setq c-label-offset -4)                ; 元々は-2
+(setq c-brace-imaginary-offset 0)
+
+;; (setq *c-tab-always-indent* nil)
+;; (setq c-indent-level 4)
+;; (setq c-continued-statement-offset 4)
+;; (setq c-brace-offset -4)
+;; (setq c-argdecl-indent 4)
+;; (setq c-label-offset -4)
+;; (setq c-brace-imaginary-offset 0)
+;; (add-hook 'ed::*c-mode-hook*
+;;           #'(lambda () (set-tab-columns 4 (selected-buffer))))
+
+;; c++-mode
+(setq c++-indent-level 4)                 ; 元々は 2
+(setq c++-continued-statement-offset 4)   ; 元々は 2
+(setq c++-brace-offset -4)                ; 元々は 0
+(setq c++-argdecl-indent 4)               ; 元々は 5
+(setq c++-label-offset -4)                ; 元々は-2
+(setq c++-brace-imaginary-offset 0)
+
+
+
+;; csharp-mode (C#)
+(setq c-indent-level 4)                 ; 元々は 2
+(setq c-continued-statement-offset 4)   ; 元々は 2
+(setq c-brace-offset -4)                ; 元々は 0
+(setq c-argdecl-indent 4)               ; 元々は 5
+(setq c-label-offset -4)                ; 元々は-2
+(setq c-brace-imaginary-offset 0)
+
+;; lisp-mode, lisp-interaction-mode
+(add-hook 'ed::*lisp-mode-hook*
+          #'(lambda ()
+              (define-key ed::*lisp-mode-map* #\M-\` 'beginning-of-defun)))
+
+(add-hook 'ed::*lisp-interaction-mode-hook*
+          #'(lambda ()
+              (define-key ed::*lisp-mode-map* #\M-\` 'beginning-of-defun)))
+
+
+;; shell-mode
+(defun kill-shell-gnrr ()
+  (interactive)
+  (kill-shell-process)
+  (sleep-for .5)
+  (kill-buffer (selected-buffer)))
+
+(add-hook 'ed::*shell-mode-hook* #'(lambda ()
+                                     (define-key ed::*shell-mode-map* #\C-d 'kill-shell-gnrr)
+                                     (define-key ed::*shell-mode-map* '(#\C-x #\k) 'kill-shell-gnrr)))
+
+;; shell3
+;; (require "shell3")
+
+;; shell script mode
+;(require "shell-script-mode") todo:
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; additional lisp packages
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; python-mode
+;;
+(load-library "py-mode")
+(push '("\\.py$" . py-mode) *auto-mode-alist*)
+;;;; (add-hook 'ed::*py-mode-hook* #'(lambda ()
+;;;;  (require "add2py")))  ; for pydoc
+(add-hook 'ed::py-shell-hook #'(lambda ()
+(define-key ed::py-shell-map '(#\C-x #\k) 'kill-shell-gnrr)))
+
+;;
+;; discrete
+;;
+(require "discrete")
+
+;;
+;; my-grep
+;;
+(load-library "grep")
+(require "my-grep")
+
+;;
+;; occur
+;;
+(defun occur ()
+  (interactive)
+  (call-interactively 'grep))
+
+(add-hook '*grep-hook* #'(lambda ()
+                           (defvar *grep-map* nil)
+                           (unless *grep-map*
+                             (setq *grep-map* (make-sparse-keymap))
+                             (define-key *grep-map* #\RET 'first-error-gnrr))
+                           (use-keymap *grep-map*)))
+
+
+;; xml-mode
+; todo:
+;(require "xml/xml-mode")
+;(use-package 'xml)
+;(push '("\\.vcproj$" . xml-mode) *auto-mode-alist*)
+
+;; cl-mode
+(require "cl-mode")
+(push '("\\.lisp$" . cl-mode) *auto-mode-alist*)
+
+; インタプリタの起動コマンド (clozure CL)
+(setf *cl-run-command*
+      (format nil "\"~A\""
+              (map-slash-to-backslash "C:/Users/g/Dropbox/apps/ccl-1.7/wx86cl64.exe")))
+
+; インデントを空白に
+(add-hook '*cl-mode-hook*
+          #'(lambda ()
+              (ed::set-buffer-local 'indent-tabs-mode nil)))
+; 評価結果を別窓にしたい場合
+(setf *cl-run-pop-to-args* '("*cl run*" 20 nil))
+(define-key *cl-mode-map* #\LFD #'(lambda () (interactive) (ed::cl-eval-last-sexp)))
+
+(defalias 'cl 'make-cl-scratch)
+
+
+;;
+;; inferior-lisp-mode
+;;
+;; (load-library "inferior-lisp-mode")
+;; (defparameter editor::*lisp-exec-path* " D:/shishido/util/ccl/wx86cl.exe")
+
+;;
+;; refer-for
+;;
+;; (require "refer-for")
+;; (use-package "refer-for")
+;; (setq refer-for::*msxml-prog-id* "Msxml2.DOMDocument.3.0")
+;; (setq refer-for::*regexp-search* nil)
+
+;;
+;; hexl-mode
+;;
+;(require "hexl") todo:
+
+;;
+;; makefile-mode
+;; http://chechepon.tripod.com/tool.html#xyzzy
+(require "makefile-mode")
+(push '("[Mm]akefile\\|\\.mak$" . elisp::makefile-mode) *auto-mode-alist*)
+
+;; common lisp hyper spec
+;;
+(require "hyperspec")
+(setq hyperspec::*hyperspec-root* "~/HyperSpec-7-0/HyperSpec/")
+(defvar hyperspec::*hyperspec-symbols-alist* nil)
+(defalias 'hyperspec 'hyperspec::hyperspec)
+
+;; (define-key ed::*lisp-mode-map* '(#\C-c #\H) #'hyperspec)
+;; (define-key ed::*lisp-mode-map* '(#\C-c #\F) #'hyperspec-format)
+;; (define-key ed::*lisp-interaction-mode-map* '(#\C-c #\H) #'hyperspec)
+;; (define-key ed::*lisp-interaction-mode-map* '(#\C-c #\F) #'hyperspec-format)
+
+;;
+;; basic-mode
+;; vbs
+(pushnew '("\\.vbs" . basic-mode) *auto-mode-alist* :test 'equal)
+
+;;
+;; rebuilder
+;; http://ohkubo.s53.xrea.com/xyzzy/
+;;
+;;  todo:
+;; (require "re-builder")
+;; (setq *reb-re-syntax* 'read)
+;; (setq *reb-match-attributes*
+  ;; '((:bold t :foreground 1 :background 2)
+    ;; (:bold t :foreground 1 :background 3)
+    ;; (:bold t :foreground 1 :background 4)
+    ;; (:bold t :foreground 1 :background 5)
+    ;; (:bold t :foreground 1 :background 6)
+    ;; (:bold t :foreground 1 :background 7)
+    ;; (:bold t :foreground 1 :background 8)
+    ;; (:bold t :foreground 1 :background 9)
+    ;; (:bold t :foreground 1 :background 10)
+    ;; (:bold t :foreground 1 :background 11)))
+
+;; (define-key ed::*reb-mode-map* #\F5 'ed::reb-next-match)
+;; (define-key ed::*reb-mode-map* #\S-F5 'ed::reb-prev-match)
+;; (define-key ed::*reb-subexp-mode-map* #\F5 'ed::reb-next-match)
+;; (define-key ed::*reb-subexp-mode-map* #\S-F5 'ed::reb-prev-match)
+
+;(defalias 'reb 're-builder) todo:
+
+;;
+;; gauche
+;;
+
+;; todo:
+;; (require "gauche-mode")
+;; (pushnew '("\\.scm$" . gauche-mode) *auto-mode-alist* :key #'car)
+;;
+;; (let ((bin-path "d:/shishido/util/Gauche/bin"))
+  ;; (setq ed::gosh-cmd (concat (append-trail-slash bin-path) ed::gosh-cmd)))
+
+
+;; (add-hook '*gauche-interaction-mode-hook*
+              ;; (gauche-set-path "d:/shishido/util/Gauche/bin"))
+
+;; (add-hook '*c-mode-hook*
+;;           #'(lambda ()
+;;               (gtags-mode 1)
+;;               ;(gtags-make-complete-list);未対応
+;;               ))
+
+;; xyzzy reference (help)
+;; reference.chm は xyzzy/etc に置く
+(defvar *reference-html-help-path*
+  (merge-pathnames "reference.chm" (etc-path)))
+
+(defun help ()
+  (interactive)
+  (ed::html-help *reference-html-help-path* (ed::get-winhelp-topic)))
+
+
+;;
+;; gtags
+;;
+;; http://xyzzy.g-artistic.net/2005/08/04/xyzzy-gnu-global-gtags/
+;;(require "elisp")
+
+;; (autoload 'gtags-mode "gtags" t)
+;;; gtags-mode
+;;(in-package "editor")
+
+;; (setq *gtags-mode-hook*
+;;       #'(lambda ()
+;;           ;; (local-set-key #\M-. 'gtags-find-tag)
+;;           (local-set-key #\M-r 'gtags-find-rtag)
+;;           (local-set-key #\M-s 'gtags-find-symbol)
+;;           (local-set-key #\M-. 'gtags-find-tag-from-here)
+;;           ;(local-set-key #\M-a 'gtags-pop-stack)
+;;           (local-set-key #\M-> 'gtags-pop-stack)
+;;           (local-set-key #\M-j 'gtags-find-with-grep)
+;;           (local-set-key #\M-c 'gtags-find-file-ext)
+;;           ;; (local-set-key #\M-n 'gtags-find-next-tag)
+;;           ;; (local-set-key #\M-p 'gtags-find-previous-tag)
+;;           ))
+;;
+;; (setq *gtags-select-mode-hook*
+;;       #'(lambda ()
+;;           (local-set-key #\M-. 'gtags-find-tag)
+;;           (local-set-key #\M-> 'gtags-pop-stack)
+;;           (local-set-key #\PageUp 'previous-page-kept-selection)
+;;           (local-set-key #\PageDown 'next-page-kept-selection)
+;;           (local-set-key #\LBtnDown 'gtags-mouse-left-press)
+;;           (local-set-key #\M-n #'(lambda ()
+;;                                    (interactive)
+;;                                    (next-virtual-line)
+;;                                    (gtags-select-tag)))
+;;           (local-set-key #\M-p #'(lambda ()
+;;                                    (interactive)
+;;                                    (previous-virtual-line)
+;;                                    (gtags-select-tag)))
+;;           ;; (local-set-key #\C-f 'forward-char)
+;;           ;; (local-set-key #\C-b 'backward-char)
+;;           ))
+;;
+;; (add-hook '*c-mode-hook*
+;;           #'(lambda ()
+;;               (gtags-mode 1)
+;;               ;(gtags-make-complete-list);未対応
+;;               ))
+;; (add-hook '*c++-mode-hook*
+;;           #'(lambda ()
+;;               (gtags-mode 1)))
+;; (add-hook '*php-mode-hook*
+;;           #'(lambda ()
+;;               (gtags-mode 1)))
+;; (in-package "user")
+
+;;
+;;
+;; autoit-mode
+;;
+;; (require "autoit-mode")
+;; (push '("\\.au3$" . autoit-mode) *auto-mode-alist*)
+;; (setq *autoit-interpreter-path* "D:\\shishido\\util\\AutoIt3\\AutoIt3.exe")
+;; (setq *autoit-compiler-path* "D:\\shishido\\util\\AutoIt3\\Aut2Exe\\Aut2exe.exe")
+
+;;
+;; global-mark
+;;
+;; (require "gmark++")
+;;
+;; (global-set-key '(#\C-x #\NUL) 'global-mark-add-interactive) ; C-x C-SPC
+;; (global-set-key '(#\C-x #\C-n) 'global-mark-jump)
+;; (global-set-key '(#\C-x #\C-p) 'global-mark-jump-reverse)
+;;
+;; (setq *global-mark-color* '(:bold t :underline t :foreground 0 :background 15))
+
+
+
+;; rv-region
+;; http://hie.s64.xrea.com/xyzzy/mylib/rv-region.html
+;(require "rv-region")
+;(setq *rv-region-stay-on* t)
+
+
+
+;; recentf
+(require "recentf")
+
+(add-hook 'ed::*recentf-mode-hook* #'(lambda ()
+                                       (set-buffer-fold-width nil)))
+
+;; cr-mode
+;(require "cr-mode") todo:
+;(global-set-key #\C-o 'cr-set-root)
+
+;; reference.chm --> menu
+(add-hook '*init-app-menus-hook*
+          #'(lambda ()
+              (let ((help (get-menu *app-menu* 'ed::help)))
+                (insert-menu-separator help 2)
+                (insert-menu-item help 3 'reference "ﾍﾙﾌﾟ(&H)"
+                                  #'(lambda () (interactive)
+                                      (ed::html-help
+                                       (merge-pathnames "etc/reference.chm"
+                                                        (si:system-root))
+                                       "")))
+;                (insert-menu-item help 4 'info "info(&I)" 'ed::info)
+;                (insert-menu-item help 5 'reference "reference(&R)"
+;                                  #'(lambda () (interactive)
+;                                      (shell-execute
+;                                       (map-slash-to-backslash
+;                                        (merge-pathnames "reference/index.html"
+;                                                         (si:system-root)))
+;                                       t)))
+                )))
+
+;; ten-comment
+;(add-hook 'ed::*c-mode-hook*
+;         #'(lambda ()
+;             (load-library "ten-comment.l")
+;             (setq ten-comment-id-base "TEN-SILS") ; `XXX' に自分の変更識別IDを設定してください(必須)
+;             ))
+
+;; bat-mode
+(export 'ed::bat-mode "ed")
+(autoload 'bat-mode "bat-mode" t)
+(pushnew '("\\.bat$" . bat-mode) *auto-mode-alist* :test 'equal)
+(push '("\\.cmd$" . bat-mode) *auto-mode-alist*)
+
+
+;; indent-for-comment
+(require "comment")
+
+(setq comment-column (1+ 48))   ; default
+
+(add-hook '*comment-after-load-hook*
+          (lambda () (push '(ed::bat-mode "REM ") comment-mode-alist)))
+
+
+;;
+;; todo-mode
+;;
+;(require "todo-mode") todo:
+
+
+;;
+;; find-file-name
+;;
+;; (require "find-file-name") todo:
+;; (setq *find-file-name-exclude-list* '(".svn")) todo:
+
+;;
+;; 別のxyzzyで開く
+;;
+;; http://wp.rapidexp.com/2008/12/xyzzy/
+;;
+(add-hook '*init-app-menus-hook*
+         #'(lambda ()
+             (let ((menu *buffer-bar-context-menu*))
+               (delete-menu menu 0 t)
+               (add-menu-item menu nil "別のxyzzyで開く" 'my-reopen-other-xyzzy)
+               (add-menu-separator menu nil)
+               (add-menu-item menu nil "タブを閉じる" 'my-kill-buffer)
+               )))
+
+;; 別のxyzzyで開く
+(defmacro int2str (int)
+  `(format nil "~A" ,int))
+
+(defun my-reopen-other-xyzzy ()
+  (interactive)
+  (if (and (buffer-modified-p) (yes-no-or-cancel-p "保存しますか？"))
+      (save-buffer))
+  (let ((buffer *buffer-bar-context-menu-buffer*))
+    (setq name (get-buffer-file-name buffer) line (current-line-number))
+    (delete-buffer buffer)
+    (let ((callcmd "xyzzy.exe"))
+      (if (>= (count-xyzzy-instance) 2)
+          (progn (setq callcmd "xyzzycli.exe")
+            (next-xyzzy-window)))
+      (call-process (concat callcmd " \"" name "\" -g " (int2str line))
+                    :exec-directory (si:system-root) :wait nil))))
+
+
+;;
+;; write-buffer-as
+;;
+;(load-library "write-buffer-as")  ; for save-buffer-gnrr todo:
+
+;;
+;; insert-paren
+;;
+;(require "insert-paren") todo:
+
+;;
+;;
+;; browserex
+;;
+;; (load-library "browserex") todo:
+
+;;
+;; my-bookmark
+;;
+;; (require "my-bookmark") todo:
+
+(define-key ctl-x-map #\C-#   #'(lambda ()
+                                 (interactive)
+                                 (bookmark-add-new-bookmark nil)))  ; set mark  --> C-x C-SPC
+;; (define-key ctl-x-map #\C-\n 'bookmark-jump-to-next-bookmark)       ; next mark --> C-x C-n
+;; (define-key ctl-x-map #\C-\p 'bookmark-jump-to-previous-bookmark)   ; prev mark --> C-x C-p
+
+
+
+;;ni
+; (require "ni/setup")
+;; 自動設定を利用する
+; (ni-autoload)
+;; PROXYを通す場合
+;(setq ni::*http-proxy-host* "proxy.host")  ; PROXY のホスト
+;(setq ni::*http-proxy-port* 8080)          ; PROXY のポート
+
+
+;;

@@ -1,0 +1,8 @@
+(require "WinSDK/windows")
+(lisp::in-package-1 "winapi")
+(provide "WinSDK/api/BaseTsd")
+(foreign::**define-c-type 'u_int 'UINT_PTR t)
+(foreign::**define-c-type 'u_long 'ULONG_PTR t)
+(foreign::**define-c-type 'ULONG_PTR 'SIZE_T t)
+(foreign::**define-c-type '(ULONG_PTR *) 'PSIZE_T t)
+(foreign::**define-c-type 'ULONG_PTR 'DWORD_PTR t)
