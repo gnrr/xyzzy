@@ -1,0 +1,23 @@
+;;
+;; view-mode
+;;
+(require 'view-mode)
+
+;;
+;; recentf
+;;
+(require "recentf")
+(add-hook 'ed::*recentf-mode-hook* #'(lambda ()
+                                       (set-buffer-fold-width nil)))
+(global-set-key '(#\M-r) 'recentf)
+
+;;
+;; tree-find
+;;
+(require 'tree-find)
+
+;;
+;; my-grep
+;;
+(load-library "grep")
+(require "my-grep")
