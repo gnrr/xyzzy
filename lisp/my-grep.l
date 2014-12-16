@@ -6,6 +6,7 @@
 
 (require "grepd")
 (require "view-mode")
+(require "c-mode")
 (provide "my-grep")
 
 ;;;
@@ -89,6 +90,11 @@ nil 拾わない
 (defun my-grep-internal (dir inputs)
   (interactive (list (my-grep-read-directory (my-grep-get-buffer-directory-namestring))
                      (my-grep-read-regexp *my-grep-default-mask*)))
+  (let ((cur-buf (selected-buffer)))
+    (dolist (buf (buffer-list))
+      (set-buffer buf)
+      (when *narrowing-region-state* (widen)))
+    (set-buffer cur-buf))
   (let ((str (first inputs))
         (mask (second inputs)))
     (when (> (length str) 0)
@@ -102,7 +108,10 @@ nil 拾わない
         (ed::*grep-name-only* nil)
         (ed::*grep-regexp-search* (if arg t nil)))
     (call-interactively 'my-grep-internal))
-  (view-mode t))
+  (view-mode 1)
+  (c-mode)
+  (turn-off-paren)
+  (use-keymap *grep-map*))
 
 ;;;
 ;;; keymap
@@ -110,7 +119,7 @@ nil 拾わない
 
 (defun my-grep-first-error ()
   (interactive)
-  (let ((*find-file-hooks* #'(lambda () (view-mode t))))
+  (let ((*find-file-hooks* #'(lambda () (view-mode 1))))
     (first-error)))
 
 (defvar *grep-map* nil)

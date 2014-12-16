@@ -32,11 +32,14 @@
   (define-key *view-mode-map* #\g 'beginning-of-buffer)
   (define-key *view-mode-map* #\G 'end-of-buffer)
   (define-key *view-mode-map* #\0 'beginning-of-line)
+  (define-key *view-mode-map* #\a 'beginning-of-line)
   (define-key *view-mode-map* #\4 'end-of-line)
   (define-key *view-mode-map* #\w 'forward-word)
   (define-key *view-mode-map* #\b 'backward-word)
   (define-key *view-mode-map* #\/ 'isearch-forward)
   (define-key *view-mode-map* #\s 'isearch-forward)
+  (define-key *view-mode-map* #\i 'view-mode)
+  (define-key *view-mode-map* #\] 'user::goto-matched-parenthesis-gnrr)
   (define-key *view-mode-map* #\q '(lambda () (interactive) (kill-buffer (selected-buffer)))))
 
 ;;;

@@ -126,5 +126,6 @@
   (run-hooks '*recentf-mode-hook*))
 
 (global-set-key '(#\C-x #\r #\r) 'recentf)
+(global-set-key '(#\M-r) 'recentf)
 
 ;;; recentf.l ends here

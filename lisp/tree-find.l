@@ -4,8 +4,9 @@
 ;;; open file from result of "tree /f"
 ;;;
 ;;; install:
-;;;   (require 'tree-find)
+;;;   (require "tree-find")
 ;;;
+(require "user")
 (provide "tree-find")
 
 ;;;
@@ -28,8 +29,8 @@
 
 ;;; utilities
 (defun get-current-line ()
-  (let ((bol (progn (goto-bol) (point)))
-        (eol (progn (goto-eol) (point))))
+  (let ((bol (save-excursion (goto-bol) (point)))
+        (eol (save-excursion (goto-eol) (point))))
     (buffer-substring bol eol)))
 
 (defun tree-mode-read-directory (default-dir)
@@ -62,28 +63,9 @@
           (mapcar #'upcase-drive-letter
                   (remove-duplicates *tree-mode-history-str* :test #'string-equal :from-end t)))))
 
-(defun tree-mode-get-path ()
-  (let (top dirs fn line ind ind-min)
-    (cond ((string-match "─+" (get-current-line)) nil)
-          ((< (current-line-number) 4) nil)
-          (t (progn
-               (setq line (get-current-line))
-               (setq ind-min (string-match "[^ ]+$" line))
-               (setq fn (car (last (split-string line " " t))))
-               (setq top (concat (save-excursion (goto-line 3) (get-current-line)) "/"))
-                (save-excursion
-                  (while (> (current-line-number) 3)
-                    (previous-line)
-                    (let ((line (get-current-line)))
-                      (setq ind (string-match "─" line))
-                      (when (and (numberp ind) (< ind ind-min))
-                        (setq ind-min ind)
-                        (setq dirs (concat (car (last (split-string line "[└├─ ]"))) "/" dirs))))))
-                (concat top dirs fn))))))
-
 (defun tree-mode-setup-buffer (dir)
   (let ((cmd (concat "tree /f " dir))
-        (buf (create-new-buffer tree-mode-buf-name)))
+        (buf (create-new-buffer (concat "*tree-" (car (last (split-string dir "/"))) "*"))))
     (setup-temp-buffer buf)
     (execute-shell-command cmd nil buf)
     (delete-other-windows)
@@ -92,14 +74,39 @@
     (goto-line 4)
     (tree-mode)))
 
+(defun tree-mode-get-path ()
+  (let ((line (get-current-line)))
+    (cond ((< (current-line-number) 4) nil)
+          ((string-match "[─]" line) nil)                                ; directory
+          ((string= (car (last (split-string line "[^ ─]" t))) "") nil)  ; empty line
+          (t (let* ((top (concat (substitute-string (save-excursion (goto-line 3) (get-current-line)) "\\\\" "/") "/"))
+                    (dirs "")
+                    (fn (car (last (split-string line " " t))))
+                    (ind-min (string-match "[^ ]+$" line))
+                    (ind ind-min))
+               (save-excursion
+                 (while (> (current-line-number) 4)
+                   (previous-line)
+                   (setq line (get-current-line))
+                   (setq ind (string-match "[└├─]" line))
+                   ;; (msg-box "~s" ind)
+                   (when (and (numberp ind) (< ind ind-min))
+                     (setq ind-min ind)
+                     (setq dirs (concat (car (last (split-string line "[─]" t))) "/" dirs)))))
+               ;; (msgbox "~s")
+               (concat top dirs fn))))))
 ;;;
 ;;; command
 ;;;
 (defun tree-mode-open-file ()
   (interactive)
-  (let ((*find-file-hooks* '(view-mode)))
-    (find-file (tree-mode-get-path)))
-  (delete-buffer tree-mode-buf-name))
+  (let ((path (tree-mode-get-path)))
+    (cond ((not path) ())
+          ((file-exist-p path) (let ((*find-file-hooks*  '(view-mode)))
+                                 (find-file path)
+                                 ;; (delete-buffer tree-mode-buf-name)
+                                 ))
+          (t (message "file not exists ~s" path)))))
 
 (defun tree-find (dir)
   (interactive (list (tree-mode-read-directory (tree-mode-get-buffer-directory-namestring))))
