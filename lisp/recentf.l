@@ -1,7 +1,8 @@
-;;; 
+;;;
 ;;; recentf.l
 ;;;
 (require "util")
+(require "view-mode")
 (provide "recentf")
 
 (export '(*recentf-mode-hook* *recentf-mode-map* *recentf-mode*))
@@ -22,7 +23,7 @@
 ;;
 ;; util
 ;;
-(defun recentf-enumulate-file-nume ()
+(defun recentf-enumulate-file-name ()
   (dolist (e *minibuffer-file-name-history*)
     (insert e "\n")))
 
@@ -38,7 +39,8 @@
           (progn
             (recentf-update-list fn)
             (delete-buffer *recentf-buf-name*)
-            (find-file fn))
+            (let ((*find-file-hooks* #'(lambda () (view-mode t))))
+              (find-file fn)))
           (message (concat "not found: " fn)))))
 
 (defun recentf-update-list (e)
@@ -49,9 +51,9 @@
   (split-string (buffer-substring (point-min) (point-max)) "\n" nil " \t"))
 
 (defun recentf-delete-empty-line ()
-  (save-excursion 
+  (save-excursion
     (goto-char (point-min))
-    (replace-buffer "^[ \t]*\n" "" :regexp t))) ; �󔒍s���폜
+    (replace-buffer "^[ \t]*\n" "" :regexp t))) ; 空白行を削除
 
 (defun recentf-delete-not-exist ()
   (flet ((not-exist-p (x) (if (and (windows-local-path-p x) (not (file-exist-p x)))
@@ -93,7 +95,7 @@
         (setq buffer-read-only ro)
         (message "saved."))
     (message "no need to save.")))
-  
+
 
 (defun recentf-kill-buffer ()
   (interactive)
@@ -104,11 +106,12 @@
   (when (find-buffer *recentf-buf-name*)
     (delete-buffer *recentf-buf-name*))
   (set-buffer (get-buffer-create *recentf-buf-name*))
-  (recentf-enumulate-file-nume)
+  (recentf-enumulate-file-name)
   (goto-char (point-min))
   (set-buffer-modified-p nil)
-  (setq buffer-read-only t)
-  (recentf-mode))
+  ;; (setq buffer-read-only t)
+  (recentf-mode)
+  (view-mode t))
 
 (defun recentf-mode ()
   ;(kill-all-local-variables)

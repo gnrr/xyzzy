@@ -1,34 +1,35 @@
 ;;;
 ;;; my-grep.l
 ;;;
-;;; emacs ‚Ì moccur-grep ‚Æ‘€ì«ŒİŠ·‚È grep ƒRƒ}ƒ“ƒh
+;;; emacs ã® moccur-grep ã¨æ“ä½œæ€§äº’æ›ãª grep ã‚³ãƒãƒ³ãƒ‰
 ;;; moccur-grep: http://www.bookshelf.jp/cgi-bin/goto.cgi?file=meadow&node=color-moccur
 
 (require "grepd")
+(require "view-mode")
 (provide "my-grep")
 
 ;;;
 ;;; customize
 ;;;
 (defvar *my-grep-default-get-word-near-point* t
-  "ŒŸõ‚µ‚½‚¢•¶š—ñ‚ğƒoƒbƒtƒ@‚Ìƒ|ƒCƒ“ƒgˆÊ’uü•Ó‚©‚çE‚¤‚©‚Ç‚¤‚©‚ğw’è‚·‚éB
-t   E‚¤
-nil E‚í‚È‚¢
-’ˆÓ: ³‹K•\Œ»‚ğg‚¤ê‡‚ÍA‚±‚Ìw’è‚Í–³‹‚³‚ê‚éB")
+  "æ¤œç´¢ã—ãŸã„æ–‡å­—åˆ—ã‚’ãƒãƒƒãƒ•ã‚¡ã®ãƒã‚¤ãƒ³ãƒˆä½ç½®å‘¨è¾ºã‹ã‚‰æ‹¾ã†ã‹ã©ã†ã‹ã‚’æŒ‡å®šã™ã‚‹ã€‚
+t   æ‹¾ã†
+nil æ‹¾ã‚ãªã„
+æ³¨æ„: æ­£è¦è¡¨ç¾ã‚’ä½¿ã†å ´åˆã¯ã€ã“ã®æŒ‡å®šã¯ç„¡è¦–ã•ã‚Œã‚‹ã€‚")
 
 (defvar *my-grep-default-mask* "*.l"
-  "ƒfƒtƒHƒ‹ƒg‚Æ‚µ‚Äg‚¤ŒŸõ‘ÎÛ‚Ìƒtƒ@ƒCƒ‹‚ÌŠg’£q‚ğw’è‚·‚éB
-—á: \"*.asm\" \"*.[ch]\" ‚È‚Ç")
+  "ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆã¨ã—ã¦ä½¿ã†æ¤œç´¢å¯¾è±¡ã®ãƒ•ã‚¡ã‚¤ãƒ«ã®æ‹¡å¼µå­ã‚’æŒ‡å®šã™ã‚‹ã€‚
+ä¾‹: \"*.asm\" \"*.[ch]\" ãªã©")
 
 ;;;
 ;;; internal
 ;;;
 
 ;;; history
-(define-history-variable *my-grep-history-dir* nil)       ; I—¹‚É•Û‘¶
+(define-history-variable *my-grep-history-dir* nil)       ; çµ‚äº†æ™‚ã«ä¿å­˜
 (setf (get 'my-grep-dir 'ed::minibuffer-history-variable) '*my-grep-history-dir*)
 
-(define-history-variable *my-grep-history-str* nil)           ; I—¹‚É•Û‘¶
+(define-history-variable *my-grep-history-str* nil)           ; çµ‚äº†æ™‚ã«ä¿å­˜
 (setf (get 'my-grep-str 'ed::minibuffer-history-variable) '*my-grep-history-str*)
 
 ;;; utilities
@@ -100,15 +101,22 @@ nil E‚í‚È‚¢
         (ed::*grep-subdir* t)
         (ed::*grep-name-only* nil)
         (ed::*grep-regexp-search* (if arg t nil)))
-    (call-interactively 'my-grep-internal)))
+    (call-interactively 'my-grep-internal))
+  (view-mode t))
 
 ;;;
 ;;; keymap
 ;;;
+
+(defun my-grep-first-error ()
+  (interactive)
+  (let ((*find-file-hooks* #'(lambda () (view-mode t))))
+    (first-error)))
+
 (defvar *grep-map* nil)
 (unless *grep-map*
   (setq *grep-map* (make-sparse-keymap))
-  (define-key *grep-map* #\RET 'first-error))
+  (define-key *grep-map* #\RET 'my-grep-first-error))
 
 (add-hook 'ed::*grep-hook*  #'(lambda () (use-keymap *grep-map*)))
 (add-hook 'ed::*grepd-hook* #'(lambda () (use-keymap *grep-map*)))
