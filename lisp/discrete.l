@@ -6,55 +6,18 @@
 (provide "discrete")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;@@@ sils ?O?W
+;;;@@@ my-recenter
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; SILS?A?á ?I path ?d?Yfe?ƒÊ?A?N?-
-;; (defvar *sils-root-path* "D:/SILS_395A_1A")
-(setq *sils-root-path* "D:/SILS_UNIT_TEST_YSPORT")
-;; (setq *sils-root-path* "D:/SILS_UNIT_TEST_YSPORT_mod2")
-;; (setq *sils-root-path* "D:/shishido/work/cvt-sils/out/test0/ver1/vCRA3_user")
-;; (setq *sils-root-path* "D:/shishido/work/daihatsu/sils/ver1/vCRA3_user")
-
-(defun sils ()
-  "cramas main ?d?NgR?E?e?B"
+(defvar my-recenter-cnt)
+(defun my-recenter ()
   (interactive)
-  (let* ((targ "CrmsMain.exe")
-         (dir (concat-path *sils-root-path* "simbase/system/bin"))
-         (targ-path (concat-path dir targ)))
-    (if (file-exist-p targ-path)
-        (shell-execute (map-slash-to-backslash targ-path) (map-slash-to-backslash dir))
-      (error "?t?@?C???a?c?A?c?e?U?1?n?B~S" targ-path))))
+  (setq my-recenter-cnt (if (eq *last-command* 'my-recenter) (mod (1+ my-recenter-cnt) 3) 0))
+  (case my-recenter-cnt
+    (0 (recenter 0))
+    (1 (recenter))
+    (t (recenter -1))))
 
-(defun ram-extram ()
-  "extram ?d?NgR?E?e?B"
-  (interactive)
-  (let* ((targ "extram.exe")
-         (dir (concat-path *sils-root-path* "simbase/system/bin"))
-         (targ-path (concat-path dir targ)))
-    (if (file-exist-p targ-path)
-        (shell-execute (map-slash-to-backslash targ-path) (map-slash-to-backslash dir))
-      (error "?t?@?C???a?c?A?c?e?U?1?n?B~S" targ-path))))
-
-(defun result ()
-  "result.exe ?d?NgR?E?e?B"
-  (interactive)
-  (let* ((targ "result.exe")
-         (dir (concat-path *sils-root-path* "simbase/system/bin"))
-         (targ-path (concat-path dir targ)))
-    (if (file-exist-p targ-path)
-        (shell-execute (map-slash-to-backslash targ-path) (map-slash-to-backslash dir))
-      (error "?t?@?C???a?c?A?c?e?U?1?n?B~S" targ-path))))
-
-(defun vc++ ()
-  "ISSless.exe ?d?r???h?E?e???s?E?AVC++ ?d?NgR?E?e?B"
-  (interactive)
-  (let* ((targ "ISSless.vcproj")
-         (dir (concat-path *sils-root-path* "ISSlessHV/ISSlessVC2005/ISSless"))
-         (targ-path (concat-path dir targ)))
-    (if (file-exist-p targ-path)
-        (shell-execute (map-slash-to-backslash targ-path) (map-slash-to-backslash dir))
-      (error "?t?@?C???a?c?A?c?e?U?1?n?B~S" targ-path))))
-
+(global-set-key #\C-l 'my-recenter)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;@@@ util
@@ -176,6 +139,17 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;@@@ functional
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;; @@@ my-write-file
+(defun my-write-file (path)
+  (interactive "FWrite file: ")
+  (let ((buf (selected-buffer)))
+    (write-file path)
+;;  (message (format nil "wrote to: ~A" path))
+    (find-file path)
+    (kill-buffer buf)))
+
+(global-set-key '(#\C-x #\C-w) 'my-write-file)
 
 ;;; @@@ find-file-at-point
 (defun find-file-at-point ()
@@ -432,54 +406,54 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
 ; (untrace function1 function2 ...) makes the functions `untraced'.
 ; (untrace) makes all `traced' functions `untraced'.
 
-(require "encap")
+;(require "encap")
 
-(defvar *trace-function-list* nil)
-(defvar *trace-depth* 0)
+;(defvar *trace-function-list* nil)
+;(defvar *trace-depth* 0)
 
 ;; mod
-(defun trace-encap (func)
-  (unless (encapsulated-p func 'traced-function)
-    (encapsulate func 'traced-function
-                 `(
-;?i??             ;(ed::setup-trace-output-buffer)
-                   (setq *trace-depth* (1+ *trace-depth*))
-;?I?X             ;(format *error-output* "~ACalling ~S~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) (cons ',func argument-list))
-                   (format t "~ACalling ~S~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) (cons ',func argument-list))
-                   (let ((#1=#:result (multiple-value-list (apply basic-definition argument-list))))
-;?I?X               ;(format *error-output* "~A~S returned~{ ~A~}~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) ',func #1#)
-                     (format t "~A~S returned~{ ~A~}~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) ',func #1#)
-                     (setq *trace-depth* (1- *trace-depth*))
-                     (values-list #1#))))
-    (push func *trace-function-list*)
-    func))
-
-(defun trace-unencap (func)
-  (when (encapsulated-p func 'traced-function)
-    (unencapsulate func 'traced-function)
-    (setq *trace-function-list* (remove func *trace-function-list* :test #'eq))
-    func))
-
-(defmacro trace (&rest args)
-  (setq *trace-depth* 0)        ; mod
-  (if (null args)
-      '*trace-function-list*
-    `(let (lst)
-       (dolist (func ',args (reverse lst))
-         (when (trace-encap func)
-           (setq lst (cons func lst)))))))
-
-(defmacro untrace (&rest args)
-  (if (null args)
-      '(let (lst)
-        (dolist (func *trace-function-list* lst)
-          (when (trace-unencap func)
-            (setq lst (cons func lst)))))
-    `(let (lst)
-       (dolist (func ',args (reverse lst))
-         (when (trace-unencap func)
-           (setq lst (cons func lst)))))))
-
+;(defun trace-encap (func)
+;  (unless (encapsulated-p func 'traced-function)
+;    (encapsulate func 'traced-function
+;                 `(
+;;?i??             ;(ed::setup-trace-output-buffer)
+;                   (setq *trace-depth* (1+ *trace-depth*))
+;;?I?X             ;(format *error-output* "~ACalling ~S~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) (cons ',func argument-list))
+;                   (format t "~ACalling ~S~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) (cons ',func argument-list))
+;                   (let ((#1=#:result (multiple-value-list (apply basic-definition argument-list))))
+;;?I?X               ;(format *error-output* "~A~S returned~{ ~A~}~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) ',func #1#)
+;                     (format t "~A~S returned~{ ~A~}~%" (make-sequence 'string *trace-depth* :initial-element #\SPC) ',func #1#)
+;                     (setq *trace-depth* (1- *trace-depth*))
+;                     (values-list #1#))))
+;    (push func *trace-function-list*)
+;    func))
+;
+;(defun trace-unencap (func)
+;  (when (encapsulated-p func 'traced-function)
+;    (unencapsulate func 'traced-function)
+;    (setq *trace-function-list* (remove func *trace-function-list* :test #'eq))
+;    func))
+;
+;(defmacro trace (&rest args)
+;  (setq *trace-depth* 0)        ; mod
+;  (if (null args)
+;      '*trace-function-list*
+;    `(let (lst)
+;       (dolist (func ',args (reverse lst))
+;         (when (trace-encap func)
+;           (setq lst (cons func lst)))))))
+;
+;(defmacro untrace (&rest args)
+;  (if (null args)
+;      '(let (lst)
+;        (dolist (func *trace-function-list* lst)
+;          (when (trace-unencap func)
+;            (setq lst (cons func lst)))))
+;    `(let (lst)
+;       (dolist (func ',args (reverse lst))
+;         (when (trace-unencap func)
+;           (setq lst (cons func lst)))))))
+;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;@@@ eval-buffer mod
 ;;; ?J???g?g?o?b?t?@?d eval-buffer ?ƒÊ???‘?I?E?A?‘???‘???t?@?C?????d?E?c?e?e?B?A?ƒÊ???B
@@ -750,7 +724,19 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
   (forward-char -1))
 
 (global-set-key #\M-9 'insert-paired-paren)
+;; (global-set-key #\( 'insert-paired-paren)
 
+(defun insert-paired-bracket ()
+  (interactive)
+  (insert "[]")
+  (forward-char -1))
+(global-set-key #\[ 'insert-paired-bracket)
+
+(defun insert-paired-brace ()
+  (interactive)
+  (insert "{}")
+  (forward-char -1))
+;; (global-set-key #\{ 'insert-paired-bracket)
 
 ;;;
 ;;; insert [] or {}
@@ -806,6 +792,20 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
 (global-set-key #\C-\; 'indent-for-comment-gnrr)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;@@@ indent-for-comment-region
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun indent-for-comment-region ()
+  (interactive)
+  (narrow-to-region (region-beginning) (region-end))
+  (goto-char (point-min))
+  (loop
+    (end-of-line)
+    (when (eq (parse-point-syntax) :comment)
+      (indent-for-comment))
+    (unless (next-line) (return)))
+  (widen))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;@@@ use regexp or fixed string in isearch
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun isearch-forward-gnrr (&optional re)
@@ -824,11 +824,23 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;@@@ use regexp or fixed string in query-replace
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun query-replace-mod (pattern replacement &optional noerror)
+  (interactive "*sQuery replace: \nswith: "
+    :default0 (word-near-point) :history0 'search
+    :default1 (word-near-point) :history1 'search)
+  (perform-replace pattern replacement t nil (interactive-p) noerror))
+
+(defun query-replace-regexp-mod (regexp replacement &optional noerror)
+  (interactive "*sQuery replace regexp: \nswith: "
+    :default0 (word-near-point) :history0 'search
+    :default1 (word-near-point) :history1 'search)
+  (perform-replace regexp replacement t t (interactive-p) noerror))
+
 (defun query-replace-gnrr (&optional re)
   (interactive "p")
   (if re
-      (call-interactively 'query-replace-regexp)
-    (call-interactively 'query-replace)))
+      (call-interactively 'query-replace-regexp-mod)
+    (call-interactively 'query-replace-mod)))
 
 (global-set-key '#\M-% 'query-replace-gnrr)
 
@@ -945,20 +957,38 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;@@@ narrow-to-function-c
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; http://www.hollenback.net/emacs/emacs.el
 (defun narrow-to-function-c ()
-  "Narrows to the function which the point is in."
   (interactive)
   (save-excursion
-    (narrow-to-region-internal (progn (beginning-of-defun)
-                                 (beginning-of-line)
-                                 (while (not (or (looking-at "^[ \t]*$")
-                                                 (bobp)))
-                                   (forward-line -1))
-                                 (if (looking-at "^[ \t]*$")
-                                     (forward-line))
+    (narrow-to-region-internal (progn
+                                 (beginning-of-defun)
+                                 (while (and (not (bobp))
+                                             (looking-at "[^ \t/]"))
+                                   (backward-line)
+                                   (beginning-of-line))
+                                 (while (looking-at "[ \t/]")
+                                   (forward-line)
+                                   (beginning-of-line))
                                  (point))
-                               (progn (end-of-defun) (point)))))
+                               (progn (end-of-defun) (point))))
+  (message "><"))
+
+;; ;; http://www.hollenback.net/emacs/emacs.el
+;; (defun narrow-to-function-c ()
+;;   "Narrows to the function which the point is in."
+;;   (interactive)
+;;   (save-excursion
+;;     (narrow-to-region-internal (progn (beginning-of-defun)
+;;                                  (beginning-of-line)
+;;                                  (while (not (or (looking-at "^[ \t]*$")
+;;                                                  (bobp)))
+;;                                    (forward-line -1))
+;;                                  (if (looking-at "^[ \t]*$")
+;;                                      (forward-line))
+;;                                  (point))
+;;                                (progn (end-of-defun) (point)))))
+
+(global-set-key '(#\C-x #\n #\f) 'narrow-to-function-c)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;@@@ step for debug
@@ -1015,50 +1045,57 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;@@@ beginning-of-defun-c
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defvar beginning-of-defun-c-pos nil)
+(defvar beginning-of-defun-c-stat nil)
 (defun beginning-of-defun-c ()
   (interactive)
   (let ((flist (funcall ed::build-summary-function))
         (l '())
         (pt (point))
         (found nil))
-    ;; get beginning/end of function's definition
-    (while flist
-      (let ((line (car (car flist)))
-            (func-name (cadr (car flist)))
-            (beg nil)
-            (end nil))
-        (save-excursion
-          (goto-line line)
-          (setq beg (point))
-          (when (scan-buffer "{")
-            ;; (setq beg (match-beginning 0))
-            (setq end (progn
-                        (goto-char (match-beginning 0))
-                        (ed::goto-matched-parenthesis)
-                        (point)))))
-        (setq l (cons (list beg end func-name line) l)))
-      (setq flist (cdr flist)))
-    ;; find function's name
-    (while l
-      (let* ((f (car l))
-             (beg (car f))
-             (end (cadr f)))
-        (when (and (numberp beg) (numberp end))
-          (when (and (>= pt beg) (<= pt end))
-            (setq found (list (nth 2 f) (nth 3 f)))))       ;; ("func-name" line-number)
-        (setq l (cdr l))))
+    (setq beginning-of-defun-c-stat (if (eq *last-command* 'beginning-of-defun-c) (not beginning-of-defun-c-stat) nil))
+    (if beginning-of-defun-c-stat
+        (goto-char beginning-of-defun-c-pos)
+      (progn
+        ;; get beginning/end of function's definition
+        (while flist
+          (let ((line (car (car flist)))
+                (func-name (cadr (car flist)))
+                (beg nil)
+                (end nil))
+            (save-excursion
+              (goto-line line)
+              (setq beg (point))
+              (when (scan-buffer "{")
+                ;; (setq beg (match-beginning 0))
+                (setq end (progn
+                            (goto-char (match-beginning 0))
+                            (ed::goto-matched-parenthesis)
+                            (point)))))
+            (setq l (cons (list beg end func-name line) l)))
+          (setq flist (cdr flist)))
+        ;; find function's name
+        (while l
+          (let* ((f (car l))
+                 (beg (car f))
+                 (end (cadr f)))
+            (when (and (numberp beg) (numberp end))
+              (when (and (>= pt beg) (<= pt end))
+                (setq found (list (nth 2 f) (nth 3 f)))))       ;; ("func-name" line-number)
+            (setq l (cdr l))))
 
-    (if found
-        (progn
-          (goto-line (cadr found))
-          (let ((func-name (substitute-string (car found) "\(.*\)" "( )")))
-            (message func-name)))
-      (msgbox "not found function's definition"))))
+        (if found
+            (progn
+              (setq beginning-of-defun-c-pos pt)
+              (goto-line (cadr found))
+              (let ((func-name (substitute-string (car found) "\(.*\)" "()")))
+                (message func-name)))
+          (msgbox "not found function's definition"))))))
 
 ;; c-mode
 (add-hook 'ed::*c-mode-hook*
           #'(lambda ()
-              (define-key ed::*c-mode-map* #\M-\` 'beginning-of-defun-c)))
+              (define-key ed::*c-mode-map* #\M-\7 'beginning-of-defun-c)))
 ;; (global-set-key #\M-\` 'beginning-of-defun-c)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1162,12 +1199,9 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun c ()
   (interactive)
-  (let ((cmd "C:\\Users\\g\\Dropbox\\apps\\ckw-mod-0.9.0-d2\\ckw-mod-0.9.0-d2\\ckw.exe")
-        (path (get-buffer-file-name))
-        (opt ""))
-    (when path
-      (setq opt (concat " -cd \"" (directory-namestring path) "\"")))
-    (call-process (concat cmd opt) :wait nil)))
+  (let ((path (get-buffer-file-name)))
+    (setq dir (if path (directory-namestring path) "/Users/4302"))
+    (launch-application (concat "cmd.exe /K cd " dir))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;@@@ e(xplorer)
@@ -1459,6 +1493,7 @@ non-nil ?I?A?á?Iea?÷???Ê?÷???d?a?E?ƒÊ?E?‘?B"
     (php-mode   . ("// "))
     (sql-mode   . ("-- "))
     (make-mode   . ("# "))
+    (ruby-mode   . ("# "))
     ))
 
 (defun toggle-one-line-comment ()

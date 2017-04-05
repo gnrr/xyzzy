@@ -6,7 +6,7 @@
 ;;; install:
 ;;;   (require "tree-find")
 ;;;
-(require "user")
+;(require "user")
 (provide "tree-find")
 
 ;;;

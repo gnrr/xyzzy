@@ -1,4 +1,4 @@
-;;;
+;;; -*- encoding: utf-8 -*-
 ;;; my-grep.l
 ;;;
 ;;; emacs の moccur-grep と操作性互換な grep コマンド
@@ -12,11 +12,7 @@
 ;;;
 ;;; customize
 ;;;
-(defvar *my-grep-default-get-word-near-point* t
-  "検索したい文字列をバッファのポイント位置周辺から拾うかどうかを指定する。
-t   拾う
-nil 拾わない
-注意: 正規表現を使う場合は、この指定は無視される。")
+(defvar *my-grep-default-get-word-near-point* t)
 
 (defvar *my-grep-default-mask* "*.l"
   "デフォルトとして使う検索対象のファイルの拡張子を指定する。
@@ -26,11 +22,29 @@ nil 拾わない
 ;;; internal
 ;;;
 
+;;; jump log
+(defvar my-grep-jump-log '())
+
+(defun my-grep-jlog-push ()
+  (interactive)
+  (push (cons (selected-buffer) (point)) my-grep-jump-log))
+
+(defun my-grep-jlog-pop ()
+  (interactive)
+  (let ((l (pop my-grep-jump-log)))
+    (if l
+        (let ((buf (car l))
+              (pt  (cdr l)))
+          (switch-to-buffer buf)
+          (goto-char pt))
+      (message "Empty jump log"))))
+
+
 ;;; history
 (define-history-variable *my-grep-history-dir* nil)       ; 終了時に保存
 (setf (get 'my-grep-dir 'ed::minibuffer-history-variable) '*my-grep-history-dir*)
 
-(define-history-variable *my-grep-history-str* nil)           ; 終了時に保存
+(define-history-variable *my-grep-history-str* nil)       ; 終了時に保存
 (setf (get 'my-grep-str 'ed::minibuffer-history-variable) '*my-grep-history-str*)
 
 ;;; utilities
@@ -65,12 +79,14 @@ nil 拾わない
                  :history 'my-grep-str))
     (split-string input "\t" t)))
 
-(defun my-grep-get-buffer-directory-namestring ()
-  ;(dbg-msgbox 1)
-  (let ((fname (get-buffer-file-name)))
-    (append-trail-slash (directory-namestring (if fname
-                                                  (directory-namestring fname)
-                                                (user-homedir-pathname))))))
+(defun dummy ()
+  (let ((old (user-homedir-pathname)))
+    (defun my-grep-get-buffer-directory-namestring ()
+      ;(dbg-msgbox 1)
+      (let ((fname (get-buffer-file-name)))
+        (setq old (append-trail-slash (directory-namestring (if fname
+                                                                (directory-namestring fname)
+                                                              old))))))))
 
 (defun my-grep-history-fix ()
   (labels ((upcase-drive-letter (s)
@@ -96,13 +112,15 @@ nil 拾わない
       (when *narrowing-region-state* (widen)))
     (set-buffer cur-buf))
   (let ((str (first inputs))
-        (mask (second inputs)))
+;        (mask (second inputs)))
+        (mask (split-string (second inputs) #\, t " "))) ; カンマ区切り
     (when (> (length str) 0)
       (ed::scan-files str mask dir)
       (my-grep-history-fix))))
 
 (defun my-grep (&optional arg)
   (interactive "p")
+  (my-grep-jlog-push)
   (let ((ed::*grep-case-fold-search* nil)
         (ed::*grep-subdir* t)
         (ed::*grep-name-only* nil)
@@ -116,7 +134,6 @@ nil 拾わない
 ;;;
 ;;; keymap
 ;;;
-
 (defun my-grep-first-error ()
   (interactive)
   (let ((*find-file-hooks* #'(lambda () (view-mode 1))))
@@ -125,11 +142,45 @@ nil 拾わない
 (defvar *grep-map* nil)
 (unless *grep-map*
   (setq *grep-map* (make-sparse-keymap))
-  (define-key *grep-map* #\RET 'my-grep-first-error))
+  (define-key *grep-map* #\RET 'my-grep-first-error)
+  ;; (define-key *grep-map* #\M-[ 'my-grep-jlog-pop)
+  )
 
 (add-hook 'ed::*grep-hook*  #'(lambda () (use-keymap *grep-map*)))
 (add-hook 'ed::*grepd-hook* #'(lambda () (use-keymap *grep-map*)))
 
 (global-set-key #\M-o 'my-grep)
+(global-set-key #\M-@ 'my-grep-jlog-pop)
+(dummy)                         ; for (my-grep-get-buffer-directory-namestring)
+
+;; http://xyzzy.s53.xrea.com/wiki/index.php?tips%2Fgrep%20%A4%C7%C6%FE%CE%CF%A4%B7%A4%BF%CA%B8%BB%FA%CE%F3%A4%F2%B6%AF%C4%B4%C9%BD%BC%A8%A4%B9%A4%EB
+(add-hook '*show-match-hook* 'ed::show-match)
+
+(in-package "editor")
+(defun grep-scan-file (file scanner)
+  (let ((found nil))
+    (while (funcall scanner)
+      (setq found t)
+      (let ((beg (progn (goto-bol) (point)))
+	    (end (progn (goto-eol) (point))))
+	(format t "~A:~D:~A~%" file (current-line-number) (buffer-substring beg end))
+	(when (and *grep-highlight-match*
+		   (buffer-stream-p *standard-output*))
+	  (save-excursion
+	    (set-buffer (buffer-stream-buffer *standard-output*))
+	    (let ((p (- (buffer-stream-point *standard-output*) end 1)))
+	      (apply #'set-text-attribute (+ (match-beginning 0) p) (+ (match-end 0) p)
+		     'grep *grep-highlight-match*)
+	      (goto-char (+ (match-end 0) p 1))
+	      (while (and (not (eolp)) (funcall scanner))
+		(setq p (point))
+		(apply #'set-text-attribute (match-beginning 0) (match-end 0)
+		       'grep *grep-highlight-match*)
+		(goto-char (+ (match-end 0) 1)))
+	      ))))
+      (or (forward-char 1)
+	  (return)))
+    found))
+(in-package "user")
 
 ;;; my-grep.l ends here
